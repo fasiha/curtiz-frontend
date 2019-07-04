@@ -1,9 +1,12 @@
+import {QuizGraph} from 'curtiz-parse-markdown';
+import {KeyToEbisu} from 'curtiz-quiz-planner'
+import {flatten, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
 import React, {useEffect, useReducer, useState} from 'react';
 import ReactDOM from 'react-dom';
 const ce = React.createElement;
 
-let md = `## @ 千と千尋の神隠し @ せんとちひろのかみがくし
+const md = `## @ 千と千尋の神隠し @ せんとちひろのかみがくし
 - @fill と
 - @fill の
 - @ 千 @ せん    @pos noun-proper-name-firstname @omit [千]と
@@ -27,8 +30,28 @@ Yowup!
 Yes!
 *Howdy!*!
 `;
+function markdownToBlocks(md: string) {
+  const re = /^#+\s+.+$/;
+  const headers = partitionBy(md.split('\n'), s => re.test(s));
+  return headers;
+}
+const blocks = markdownToBlocks(md);
 
-function Main() { return ce('p', {}, 'Whee!') }
+let graph: QuizGraph&KeyToEbisu;
 
-// let db = web.setup('testing');
-ReactDOM.render(ce(Main), document.getElementById('root'));
+async function setup() {
+  const db = web.setup('testing');
+  graph = await web.initialize(db, md);
+  return;
+}
+
+function Main() {
+  const raws = flatten(blocks.map(block => block.map((line, lino) => block[0] + (lino ? '\n' + line : ''))));
+  const lines = flatten(blocks);
+  // console.log(Array.from(graph.raws.keys()));
+  // console.log('lines', lines);
+  // console.log('raws', raws);
+  return ce('ul', null, lines.map((line, i) => ce('li', {key: i}, line + (graph.raws.has(raws[i]) ? ' XXX ' : ''))));
+}
+
+setup().then(() => ReactDOM.render(ce(Main), document.getElementById('root')));
