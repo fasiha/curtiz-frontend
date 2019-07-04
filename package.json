@@ -1,0 +1,31 @@
+{
+  "name": "curtiz-frontend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc -p .",
+    "dist": "browserify index.js -o index.bundle.js",
+    "watch": "fswatch -0 -o -l .1 index.js | xargs -0 -n 1 -I {} npm run dist"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/abstract-leveldown": "^5.0.1",
+    "@types/level-js": "^4.0.1",
+    "@types/levelup": "^3.1.1",
+    "@types/react": "^16.8.23",
+    "@types/react-dom": "^16.8.4",
+    "browserify": "^16.2.3",
+    "typescript": "^3.5.2"
+  },
+  "dependencies": {
+    "curtiz-parse-markdown": "git+https://github.com/fasiha/curtiz-parse-markdown.git",
+    "curtiz-quiz-planner": "git+https://github.com/fasiha/curtiz-quiz-planner.git",
+    "curtiz-web-db": "git+https://github.com/fasiha/curtiz-web-db.git",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6"
+  }
+}
