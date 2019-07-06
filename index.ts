@@ -40,10 +40,19 @@ function Learn(props: {docs: DocsGraphs}) {
   // console.log('lines', lines);
   // console.log('raws', raws);
   return ce(
-      'div', null, list, ce('ul', null, lines.map((line, i) => {
-        let v = [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
-        return ce('li', {key: i}, ...v);
-      })));
+      'div',
+      null,
+      list,
+      ce(
+          'ul',
+          null,
+          lines.map((line, i) => {
+            let v =
+                [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
+            return ce('li', {key: i}, ...v);
+          }),
+          ),
+  );
 }
 
 function Quiz() { return ce('p', null, 'Quizzing!'); }
