@@ -9,9 +9,9 @@ export type Doc = {
   source: any,
   modified: Date,
 };
-export type Docs = {
+export interface Docs {
   docs: Map<string, Doc>
-};
+}
 
 function rehydrateDoc(nominalDoc: Doc) {
   if (nominalDoc.modified instanceof Date) { return nominalDoc; }

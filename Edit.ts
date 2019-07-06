@@ -4,7 +4,7 @@ import {Db, Doc, Docs, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
 
 const ce = React.createElement;
 
-function EditableDoc(props: {doc: Doc, db: Db}) {
+function EditableDoc(props: {doc: Doc, updateDoc: (doc: Doc) => any}) {
   const [value, setValue] = useState(props.doc.content);
   return ce(
       'div',
@@ -21,27 +21,15 @@ function EditableDoc(props: {doc: Doc, db: Db}) {
         onClick: (_: any) => {
           props.doc.content = value;
           props.doc.modified = new Date();
-          saveDoc(props.db, DOCS_PREFIX, props.doc);
+          props.updateDoc(props.doc);
         }
       },
          'Submit'),
   )
 }
 
-export function Edit(props: {db: Db, reloadCount: number}) {
-  const [docs, setDocs] = useState({docs: new Map()} as Docs)
-
-  async function loader() {
-    const ret = await loadDocs(props.db, DOCS_PREFIX);
-
-    const date = new Date();
-    const newName = 'New ' + date.toISOString();
-    ret.docs.set(newName, {title: newName, content: '(empty)', source: undefined, modified: date});
-    setDocs(ret);
-  }
-  useEffect(() => { loader(); }, [props.reloadCount]);
-
+export function Edit(props: {docs: Docs, updateDoc: (doc: Doc) => any}) {
   const rv = [];
-  for (const [title, doc] of docs.docs) { rv.push(ce(EditableDoc, {doc, db: props.db})); }
+  for (const doc of props.docs.docs.values()) { rv.push(ce(EditableDoc, {doc, updateDoc: props.updateDoc})); }
   return ce('div', null, ...rv);
 }

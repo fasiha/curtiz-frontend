@@ -1,5 +1,5 @@
 import {AbstractIterator} from 'abstract-leveldown';
-import {QuizGraph} from 'curtiz-parse-markdown';
+import {QuizGraph, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu} from 'curtiz-quiz-planner'
 import {flatten, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
@@ -8,50 +8,89 @@ import {LevelUp} from 'levelup';
 import React, {useEffect, useReducer, useState} from 'react';
 import ReactDOM from 'react-dom';
 
+import {Doc, Docs, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
 import {Edit} from './Edit';
 
 const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
+type GraphType = QuizGraph&KeyToEbisu;
 
-const md = `## @ 千と千尋の神隠し @ せんとちひろのかみがくし
-- @fill と
-- @fill の
-- @ 千 @ せん    @pos noun-proper-name-firstname @omit [千]と
-- @ 千尋 @ ちひろ    @pos noun-proper-name-firstname
-- @ 神隠し @ かみがくし    @pos noun-common-general
-- @translation @en Spirited Away (film)
+function Quiz(props: {doc: Doc, graph: GraphType}) {
+  if (!(props.doc && props.graph)) { return ce('p', null, 'waiting for data'); }
+  const blocks = markdownToBlocks(props.doc.content);
+  const raws = flatten(blocks.map(block => block.map((line, lino) => block[0] + (lino ? '\n' + line : ''))));
+  const lines = flatten(blocks);
+  const learned = (x: string) => isRawLearned(x, props.graph);
+  const learnable = (x: string) => isRawLearnable(x, props.graph);
+  // console.log(Array.from(graph.raws.keys()));
+  // console.log('lines', lines);
+  // console.log('raws', raws);
+  return ce('ul', null, lines.map((line, i) => {
+    let v = [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
+    return ce('li', {key: i}, ...v);
+  }));
+}
 
-Hi there!
+function Learn() { return ce('p', null, 'learning!'); }
 
-## @ このおはなしに出て来る人びと @ このおはなしにでてくるひとびと
-- @fill に
-- @fill 出て来る @ でてくる
-- @ 話 @ はなし    @pos noun-common-verbal_suru @omit はなし
-- @ 出る @ でる    @pos verb-general @omit 出
-- @ 来る @ くる    @pos verb-bound
-- @ 人々 @ ひとびと    @pos noun-common-general @omit 人びと
-Welcome!
-## @ 湯婆婆 @ ゆばーば
-- @ 湯婆婆 @ ゆばーば    @pos noun-proper-name-general
-Yowup!
-Yes!
-*Howdy!*!
-`;
+type AppState = 'edit'|'learn'|'quiz';
+interface DocsGraphs extends Docs {
+  graphs: Map<string, GraphType>;
+}
+
+function Main() {
+  const [db, setDb] = useState(undefined as Db | undefined);
+  const defaultDocsGraphs: DocsGraphs = {docs: new Map(), graphs: new Map()};
+  const [docs, setDocs] = useState(defaultDocsGraphs);
+
+  async function loader() {
+    const newdb = db || web.setup('testing');
+    setDb(newdb);
+
+    const newdocs: DocsGraphs = {...await loadDocs(newdb, DOCS_PREFIX), graphs: new Map()};
+    {
+      const date = new Date();
+      const newName = 'New ' + date.toISOString();
+      newdocs.docs.set(newName, {title: newName, content: '(empty)', source: undefined, modified: date});
+    }
+    for (const [key, doc] of newdocs.docs) { newdocs.graphs.set(key, await web.initialize(newdb, doc.content)); }
+    newdocs.graphs;
+    setDocs(newdocs);
+  }
+  useEffect(() => { loader(); }, [0]);
+
+  async function updateDoc(doc: Doc) {
+    if (!db) { throw new Error('cannot update doc when db undefined'); }
+    saveDoc(db, DOCS_PREFIX, doc); // No log FIXME
+    docs.graphs.set(doc.title, await web.initialize(db, doc.content));
+  }
+
+  const defaultState: AppState = 'edit';
+  const [state, setState] = useState(defaultState as AppState);
+
+  const title = Array.from(docs.docs.keys())[0];
+  const body =
+      state === 'edit'
+          ? ce(Edit, {docs, updateDoc})
+          : state === 'learn' ? ce(Learn, {}) : ce(Quiz, {doc: docs.docs.get(title), graph: docs.graphs.get(title)});
+
+  const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
+  return ce(
+      'div',
+      null,
+      ce('button', {onClick: () => setStateDebounce('edit')}, 'Edit'),
+      ce('button', {onClick: () => setStateDebounce('learn')}, 'Learn'),
+      ce('button', {onClick: () => setStateDebounce('quiz')}, 'Quiz'),
+      ce('div', null, body),
+  );
+}
+
+ReactDOM.render(ce(Main), document.getElementById('root'));
+
 function markdownToBlocks(md: string) {
   const re = /^#+\s+.+$/;
   const headers = partitionBy(md.split('\n'), s => re.test(s));
   return headers;
-}
-const blocks = markdownToBlocks(md);
-
-type GraphType = QuizGraph&KeyToEbisu;
-let GRAPH: GraphType;
-let DB: Db;
-
-async function setup(): Promise<void> {
-  DB = web.setup('testing');
-  GRAPH = await web.initialize(DB, md);
-  return;
 }
 
 function isRawLearned(raw: string, GRAPH: GraphType): boolean {
@@ -64,19 +103,3 @@ function isRawLearned(raw: string, GRAPH: GraphType): boolean {
 }
 
 function isRawLearnable(raw: string, GRAPH: GraphType): boolean { return GRAPH.raws.has(raw); }
-
-function Main() {
-  const raws = flatten(blocks.map(block => block.map((line, lino) => block[0] + (lino ? '\n' + line : ''))));
-  const lines = flatten(blocks);
-  const learned = (x: string) => isRawLearned(x, GRAPH);
-  const learnable = (x: string) => isRawLearnable(x, GRAPH);
-  // console.log(Array.from(graph.raws.keys()));
-  // console.log('lines', lines);
-  // console.log('raws', raws);
-  return ce('ul', null, lines.map((line, i) => {
-    let v = [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
-    return ce('li', {key: i}, ...v);
-  }));
-}
-
-setup().then(() => ReactDOM.render(ce(Edit, {db: DB, reloadCount: 0}), document.getElementById('root')));
