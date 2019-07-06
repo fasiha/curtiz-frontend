@@ -200,18 +200,32 @@ var docs_1 = require("./docs");
 var Edit_1 = require("./Edit");
 var ce = react_1.default.createElement;
 function Learn(props) {
-    var blocks = markdownToBlocks(props.doc.content);
+    var titles = Array.from(props.docs.docs.keys());
+    var initialTitle = titles[0];
+    var _a = __read(react_1.useState(initialTitle), 2), selectedTitle = _a[0], setSelectedTitle = _a[1];
+    if (!selectedTitle) {
+        return ce('p', null, 'Go to Edit & add a document');
+    }
+    var doc = props.docs.docs.get(selectedTitle);
+    var graph = props.docs.graphs.get(selectedTitle);
+    if (!(doc && graph)) {
+        throw new Error('typescript pacification turned out to be necessary');
+    }
+    var list = ce.apply(void 0, __spread(['ul', null], titles.map(function (title) {
+        return ce('li', null, title, ce('button', { disabled: title === selectedTitle, onClick: function () { return setSelectedTitle(title); } }, 'select'));
+    })));
+    var blocks = markdownToBlocks(doc.content);
     var raws = curtiz_utils_1.flatten(blocks.map(function (block) { return block.map(function (line, lino) { return block[0] + (lino ? '\n' + line : ''); }); }));
     var lines = curtiz_utils_1.flatten(blocks);
-    var learned = function (x) { return isRawLearned(x, props.graph); };
-    var learnable = function (x) { return isRawLearnable(x, props.graph); };
+    var learned = function (x) { return isRawLearned(x, graph); };
+    var learnable = function (x) { return isRawLearnable(x, graph); };
     // console.log(Array.from(graph.raws.keys()));
     // console.log('lines', lines);
     // console.log('raws', raws);
-    return ce('ul', null, lines.map(function (line, i) {
+    return ce('div', null, list, ce('ul', null, lines.map(function (line, i) {
         var v = [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
         return ce.apply(void 0, __spread(['li', { key: i }], v));
-    }));
+    })));
 }
 function Quiz() { return ce('p', null, 'Quizzing!'); }
 function Main() {
@@ -295,12 +309,7 @@ function Main() {
     }
     var defaultState = 'edit';
     var _c = __read(react_1.useState(defaultState), 2), state = _c[0], setState = _c[1];
-    var title = Array.from(docs.docs.keys())[0];
-    var body = state === 'edit'
-        ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc })
-        : state === 'quiz'
-            ? ce(Quiz, {})
-            : ce(Learn, { doc: docs.docs.get(title), graph: docs.graphs.get(title) });
+    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, { docs: docs });
     var setStateDebounce = function (x) { return (x !== state) && setState(x); };
     return ce('div', null, ce('button', { onClick: function () { return setStateDebounce('edit'); } }, 'Edit'), ce('button', { onClick: function () { return setStateDebounce('learn'); } }, 'Learn'), ce('button', { onClick: function () { return setStateDebounce('quiz'); } }, 'Quiz'), ce('div', null, body));
 }
