@@ -15,19 +15,35 @@ const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu;
 
-function Learn(props: {doc: Doc, graph: GraphType}) {
-  const blocks = markdownToBlocks(props.doc.content);
+function Learn(props: {docs: DocsGraphs}) {
+  const titles = Array.from(props.docs.docs.keys());
+  const initialTitle = titles[0];
+  const [selectedTitle, setSelectedTitle] = useState(initialTitle as string | undefined);
+  if (!selectedTitle) { return ce('p', null, 'Go to Edit & add a document'); }
+
+  const doc = props.docs.docs.get(selectedTitle);
+  const graph = props.docs.graphs.get(selectedTitle);
+  if (!(doc && graph)) { throw new Error('typescript pacification turned out to be necessary'); }
+  const list =
+      ce('ul', null,
+         ...titles.map(title =>
+                           ce('li', null, title,
+                              ce('button', {disabled: title === selectedTitle, onClick: () => setSelectedTitle(title)},
+                                 'select'))));
+
+  const blocks = markdownToBlocks(doc.content);
   const raws = flatten(blocks.map(block => block.map((line, lino) => block[0] + (lino ? '\n' + line : ''))));
   const lines = flatten(blocks);
-  const learned = (x: string) => isRawLearned(x, props.graph);
-  const learnable = (x: string) => isRawLearnable(x, props.graph);
+  const learned = (x: string) => isRawLearned(x, graph);
+  const learnable = (x: string) => isRawLearnable(x, graph);
   // console.log(Array.from(graph.raws.keys()));
   // console.log('lines', lines);
   // console.log('raws', raws);
-  return ce('ul', null, lines.map((line, i) => {
-    let v = [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
-    return ce('li', {key: i}, ...v);
-  }));
+  return ce(
+      'div', null, list, ce('ul', null, lines.map((line, i) => {
+        let v = [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
+        return ce('li', {key: i}, ...v);
+      })));
 }
 
 function Quiz() { return ce('p', null, 'Quizzing!'); }
@@ -67,12 +83,8 @@ function Main() {
   const defaultState: AppState = 'edit';
   const [state, setState] = useState(defaultState as AppState);
 
-  const title = Array.from(docs.docs.keys())[0];
-  const body = state === 'edit'
-                   ? ce(Edit, {docs, updateDoc})
-                   : state === 'quiz'
-                         ? ce(Quiz, {})
-                         : ce(Learn, {doc: docs.docs.get(title) as Doc, graph: docs.graphs.get(title) as GraphType});
+  const body =
+      state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, {docs: docs});
 
   const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
   return ce(
