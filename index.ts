@@ -15,7 +15,7 @@ const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu;
 
-function Quiz(props: {doc: Doc, graph: GraphType}) {
+function Learn(props: {doc: Doc, graph: GraphType}) {
   const blocks = markdownToBlocks(props.doc.content);
   const raws = flatten(blocks.map(block => block.map((line, lino) => block[0] + (lino ? '\n' + line : ''))));
   const lines = flatten(blocks);
@@ -30,7 +30,7 @@ function Quiz(props: {doc: Doc, graph: GraphType}) {
   }));
 }
 
-function Learn() { return ce('p', null, 'learning!'); }
+function Quiz() { return ce('p', null, 'Quizzing!'); }
 
 type AppState = 'edit'|'learn'|'quiz';
 interface DocsGraphs extends Docs {
@@ -70,9 +70,9 @@ function Main() {
   const title = Array.from(docs.docs.keys())[0];
   const body = state === 'edit'
                    ? ce(Edit, {docs, updateDoc})
-                   : state === 'learn'
-                         ? ce(Learn, {})
-                         : ce(Quiz, {doc: docs.docs.get(title) as Doc, graph: docs.graphs.get(title) as GraphType});
+                   : state === 'quiz'
+                         ? ce(Quiz, {})
+                         : ce(Learn, {doc: docs.docs.get(title) as Doc, graph: docs.graphs.get(title) as GraphType});
 
   const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
   return ce(
