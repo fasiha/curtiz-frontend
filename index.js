@@ -94,9 +94,6 @@ var docs_1 = require("./docs");
 var Edit_1 = require("./Edit");
 var ce = react_1.default.createElement;
 function Quiz(props) {
-    if (!(props.doc && props.graph)) {
-        return ce('p', null, 'waiting for data');
-    }
     var blocks = markdownToBlocks(props.doc.content);
     var raws = curtiz_utils_1.flatten(blocks.map(function (block) { return block.map(function (line, lino) { return block[0] + (lino ? '\n' + line : ''); }); }));
     var lines = curtiz_utils_1.flatten(blocks);
@@ -195,7 +192,9 @@ function Main() {
     var title = Array.from(docs.docs.keys())[0];
     var body = state === 'edit'
         ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc })
-        : state === 'learn' ? ce(Learn, {}) : ce(Quiz, { doc: docs.docs.get(title), graph: docs.graphs.get(title) });
+        : state === 'learn'
+            ? ce(Learn, {})
+            : ce(Quiz, { doc: docs.docs.get(title), graph: docs.graphs.get(title) });
     var setStateDebounce = function (x) { return (x !== state) && setState(x); };
     return ce('div', null, ce('button', { onClick: function () { return setStateDebounce('edit'); } }, 'Edit'), ce('button', { onClick: function () { return setStateDebounce('learn'); } }, 'Learn'), ce('button', { onClick: function () { return setStateDebounce('quiz'); } }, 'Quiz'), ce('div', null, body));
 }

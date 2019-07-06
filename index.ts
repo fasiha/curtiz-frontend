@@ -16,7 +16,6 @@ type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu;
 
 function Quiz(props: {doc: Doc, graph: GraphType}) {
-  if (!(props.doc && props.graph)) { return ce('p', null, 'waiting for data'); }
   const blocks = markdownToBlocks(props.doc.content);
   const raws = flatten(blocks.map(block => block.map((line, lino) => block[0] + (lino ? '\n' + line : ''))));
   const lines = flatten(blocks);
@@ -69,10 +68,11 @@ function Main() {
   const [state, setState] = useState(defaultState as AppState);
 
   const title = Array.from(docs.docs.keys())[0];
-  const body =
-      state === 'edit'
-          ? ce(Edit, {docs, updateDoc})
-          : state === 'learn' ? ce(Learn, {}) : ce(Quiz, {doc: docs.docs.get(title), graph: docs.graphs.get(title)});
+  const body = state === 'edit'
+                   ? ce(Edit, {docs, updateDoc})
+                   : state === 'learn'
+                         ? ce(Learn, {})
+                         : ce(Quiz, {doc: docs.docs.get(title) as Doc, graph: docs.graphs.get(title) as GraphType});
 
   const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
   return ce(
