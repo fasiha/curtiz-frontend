@@ -15,7 +15,7 @@ const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu;
 
-function Learn(props: {docs: DocsGraphs}) {
+function Learn(props: {docs: DocsGraphs, learn: (keys: string[], graph: GraphType) => any}) {
   const titles = Array.from(props.docs.docs.keys());
   const initialTitle = titles[0];
   const [selectedTitle, setSelectedTitle] = useState(initialTitle as string | undefined);
@@ -36,9 +36,6 @@ function Learn(props: {docs: DocsGraphs}) {
   const lines = flatten(blocks);
   const learned = (x: string) => isRawLearned(x, graph);
   const learnable = (x: string) => isRawLearnable(x, graph);
-  // console.log(Array.from(graph.raws.keys()));
-  // console.log('lines', lines);
-  // console.log('raws', raws);
   return ce(
       'div',
       null,
@@ -46,11 +43,15 @@ function Learn(props: {docs: DocsGraphs}) {
       ce(
           'ul',
           null,
-          lines.map((line, i) => {
-            let v =
-                [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
-            return ce('li', {key: i}, ...v);
-          }),
+          lines.map((line, i) => ce(
+                        'li', {key: i}, line,
+                        (learnable(raws[i])
+                             ? (learned(raws[i])
+                                    ? ' [learned!] '
+                                    : ce('button',
+                                         {onClick: () => props.learn(Array.from(graph.raws.get(raws[i]) || []), graph)},
+                                         'learn'))
+                             : ''))),
           ),
   );
 }
@@ -92,8 +93,10 @@ function Main() {
   const defaultState: AppState = 'edit';
   const [state, setState] = useState(defaultState as AppState);
 
-  const body =
-      state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, {docs: docs});
+  const body = state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, {
+    docs,
+    learn: (keys: string[], graph: GraphType) => db ? web.learnQuizzes(db, keys, graph) : 0,
+  });
 
   const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
   return ce(
