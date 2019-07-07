@@ -63,30 +63,12 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
   )
 }
 
-function Learn(props: {docs: DocsGraphs, learn: (keys: string[], graph: GraphType) => any}) {
-  const titles = Array.from(props.docs.docs.keys());
-  const initialTitle = titles[0];
-  const [selectedTitle, setSelectedTitle] = useState(initialTitle as string | undefined);
-  if (!selectedTitle) { return ce('p', null, 'Go to Edit & add a document'); }
-
-  const doc = props.docs.docs.get(selectedTitle);
-  const graph = props.docs.graphs.get(selectedTitle);
-  if (!(doc && graph)) { throw new Error('typescript pacification turned out to be necessary'); }
-  const list =
-      ce('ul', null,
-         ...titles.map(title =>
-                           ce('li', null, title,
-                              ce('button', {disabled: title === selectedTitle, onClick: () => setSelectedTitle(title)},
-                                 'select'))));
-
-  const blocks = markdownToBlocks(doc.content);
-  return ce(
-      'div',
-      null,
-      list,
-      blocks.map((block, i) => ce(Block, {key: selectedTitle + '/' + i, block, graph, learn: props.learn})),
-  );
-  // Without the `key` above, React confuses different docs: the props are ok but the reducer state is wrong. Why?
+function Learn(props: {doc: Doc, graph: GraphType, learn: (keys: string[]) => any}) {
+  const blocks = markdownToBlocks(props.doc.content);
+  return ce('div', null,
+            blocks.map((block, i) =>
+                           ce(Block, {key: props.doc.title + '/' + i, block, graph: props.graph, learn: props.learn})));
+  // Without `key` above, React doesn't properly handle the reducer.
 }
 
 function Quiz() { return ce('p', null, 'Quizzing!'); }
@@ -112,7 +94,6 @@ function Main() {
       newdocs.docs.set(newName, {title: newName, content: '(empty)', source: undefined, modified: date});
     }
     for (const [key, doc] of newdocs.docs) { newdocs.graphs.set(key, await web.initialize(newdb, doc.content)); }
-    newdocs.graphs;
     setDocs(newdocs);
   }
   useEffect(() => { loader(); }, [0]);
@@ -126,10 +107,21 @@ function Main() {
   const defaultState: AppState = 'edit';
   const [state, setState] = useState(defaultState as AppState);
 
-  const body = state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, {
-    docs,
-    learn: (keys: string[], graph: GraphType) => db ? web.learnQuizzes(db, keys, graph) : 0,
-  });
+  const [selectedTitle, setSelectedTitle] = useState(undefined as string | undefined);
+  const titles = Array.from(docs.docs.keys());
+  if (selectedTitle === undefined && titles[0] !== undefined) { setSelectedTitle(titles[0]) }
+  const listOfDocs = ce(
+      'ul', null,
+      titles.map(title => ce('li', {key: title}, title,
+                             ce('button', {disabled: title === selectedTitle, onClick: () => setSelectedTitle(title)},
+                                'select'))));
+
+  const doc = docs.docs.get(selectedTitle || '');
+  const graph = docs.graphs.get(selectedTitle || '');
+  const learn = (doc && graph)
+                    ? ce(Learn, {doc, graph, learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0})
+                    : '';
+  const body = state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? ce(Quiz, {}) : learn;
 
   const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
   return ce(
@@ -138,7 +130,7 @@ function Main() {
       ce('button', {onClick: () => setStateDebounce('edit')}, 'Edit'),
       ce('button', {onClick: () => setStateDebounce('learn')}, 'Learn'),
       ce('button', {onClick: () => setStateDebounce('quiz')}, 'Quiz'),
-      ce('div', null, body),
+      ce('div', null, listOfDocs, body),
   );
 }
 
