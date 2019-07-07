@@ -255,7 +255,10 @@ function AQuiz(props) {
     var _a = __read(react_1.useState(''), 2), input = _a[0], setInput = _a[1];
     return ce('div', null, prompt, ce('input', { value: input, type: 'text', name: 'name', onChange: function (e) { return setInput(e.target.value); } }), ce('button', {
         onClick: function () {
-            props.update(grader(input), quiz.uniqueId);
+            var grade = grader(input);
+            var summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
+                ("\u300C" + input + "\u300Dfor " + prompt);
+            props.update(grade, quiz.uniqueId, summary);
             setInput('');
         }
     }, 'Submit'));
@@ -268,16 +271,18 @@ function Quizzer(props) {
             setQuiz(bestQuiz);
         }
     }
+    var _b = __read(react_1.useState([]), 2), pastResults = _b[0], setPastResults = _b[1];
     if (!quiz) {
         return ce('p', null, 'Nothing to quiz for this document!');
     }
-    return ce(AQuiz, {
-        update: function (result, key) {
+    return ce('div', null, ce(AQuiz, {
+        update: function (result, key, summary) {
             props.update(result, key);
             setQuiz(curtiz_quiz_planner_1.whichToQuiz(props.graph));
+            setPastResults(pastResults.concat(summary));
         },
         quiz: quiz
-    });
+    }), ce('ul', null, curtiz_utils_1.mapRight(pastResults, function (s) { return ce('li', { key: s }, s); })));
 }
 function Main() {
     var _a = __read(react_1.useState(undefined), 2), db = _a[0], setDb = _a[1];
@@ -14168,6 +14173,16 @@ function* flatMapIterator(it, f) {
     }
 }
 exports.flatMapIterator = flatMapIterator;
+/**
+ * Like `Array.prototype.map` but produces reversed output (using indexing).
+ * @param v Array
+ * @param mapper Function, same as `Array.prototype.map`.
+ */
+function mapRight(v, mapper) {
+    const N = v.length;
+    return Array.from(Array(N), (_, i) => mapper(v[N - i - 1], N - i - 1, v));
+}
+exports.mapRight = mapRight;
 
 },{}],162:[function(require,module,exports){
 "use strict";

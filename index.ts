@@ -1,7 +1,7 @@
 import {AbstractIterator} from 'abstract-leveldown';
 import {Quiz, QuizGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
-import {partitionBy} from 'curtiz-utils';
+import {mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
@@ -73,7 +73,7 @@ function Learn(props: {doc: Doc, graph: GraphType, learn: (keys: string[]) => an
 
 function wrap(s: string) { return `_(${s})_` }
 
-function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string) => any}) {
+function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summary: string) => any}) {
   const quiz = props.quiz;
   let grader: (s: string) => boolean;
   let prompt = '';
@@ -98,7 +98,10 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string) => any
             ce('input', {value: input, type: 'text', name: 'name', onChange: e => setInput(e.target.value)}),
             ce('button', {
               onClick: () => {
-                props.update(grader(input), quiz.uniqueId);
+                const grade = grader(input);
+                const summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
+                                `「${input}」for ${prompt}`;
+                props.update(grade, quiz.uniqueId, summary);
                 setInput('');
               }
             },
@@ -111,15 +114,18 @@ function Quizzer(props: {doc: Doc, graph: GraphType, update: (result: boolean, k
     const bestQuiz = whichToQuiz(props.graph);
     if (bestQuiz !== quiz) { setQuiz(bestQuiz); }
   }
+  const [pastResults, setPastResults] = useState([] as string[]);
 
   if (!quiz) { return ce('p', null, 'Nothing to quiz for this document!'); }
-  return ce(AQuiz, {
-    update: (result: boolean, key: string) => {
-      props.update(result, key);
-      setQuiz(whichToQuiz(props.graph));
-    },
-    quiz
-  });
+  return ce('div', null, ce(AQuiz, {
+              update: (result: boolean, key: string, summary: string) => {
+                props.update(result, key);
+                setQuiz(whichToQuiz(props.graph));
+                setPastResults(pastResults.concat(summary));
+              },
+              quiz
+            }),
+            ce('ul', null, mapRight(pastResults, s => ce('li', {key: s}, s))));
 }
 
 type AppState = 'edit'|'learn'|'quiz';
