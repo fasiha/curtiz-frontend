@@ -8,6 +8,7 @@ all: index.bundle.js
 
 index.bundle.js: $(JSSRC)
 	npm run dist
+	echo done
 
 # Assumes VS Code is running in watch build mode
 watch:

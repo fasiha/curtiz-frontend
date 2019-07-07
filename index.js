@@ -93,6 +93,33 @@ var react_dom_1 = __importDefault(require("react-dom"));
 var docs_1 = require("./docs");
 var Edit_1 = require("./Edit");
 var ce = react_1.default.createElement;
+function blockReducer(state, action) {
+    if (action.type === 'learn') {
+        state.learned[action.payload] = true;
+        action.learn();
+        return __assign({}, state);
+    }
+    else {
+        throw new Error('unknown action');
+    }
+}
+function Block(props) {
+    var raw = props.block.map(function (line, lino) { return props.block[0] + (lino ? '\n' + line : ''); });
+    var learned = function (x) { return isRawLearned(x, props.graph); };
+    var learnable = function (x) { return isRawLearnable(x, props.graph); };
+    var init = { learned: raw.map(function (r) { return learnable(r) ? learned(r) : undefined; }) };
+    var _a = __read(react_1.useReducer(blockReducer, init), 2), state = _a[0], dispatch = _a[1];
+    return ce('ul', null, props.block.map(function (line, i) { return ce('li', { key: i }, line, state.learned[i] === undefined
+        ? ''
+        : (state.learned[i] ? ' [learned!] '
+            : ce('button', {
+                onClick: function () { return dispatch({
+                    type: 'learn',
+                    payload: i,
+                    learn: function () { return props.learn(Array.from(props.graph.raws.get(raw[i]) || []), props.graph); }
+                }); }
+            }, 'Learn'))); }));
+}
 function Learn(props) {
     var titles = Array.from(props.docs.docs.keys());
     var initialTitle = titles[0];
@@ -109,17 +136,8 @@ function Learn(props) {
         return ce('li', null, title, ce('button', { disabled: title === selectedTitle, onClick: function () { return setSelectedTitle(title); } }, 'select'));
     })));
     var blocks = markdownToBlocks(doc.content);
-    var raws = curtiz_utils_1.flatten(blocks.map(function (block) { return block.map(function (line, lino) { return block[0] + (lino ? '\n' + line : ''); }); }));
-    var lines = curtiz_utils_1.flatten(blocks);
-    var learned = function (x) { return isRawLearned(x, graph); };
-    var learnable = function (x) { return isRawLearnable(x, graph); };
-    // console.log(Array.from(graph.raws.keys()));
-    // console.log('lines', lines);
-    // console.log('raws', raws);
-    return ce('div', null, list, ce('ul', null, lines.map(function (line, i) {
-        var v = [line, (learnable(raws[i]) ? (learned(raws[i]) ? ' [learned!] ' : ce('button', null, 'learn')) : '')];
-        return ce.apply(void 0, __spread(['li', { key: i }], v));
-    })));
+    return ce('div', null, list, blocks.map(function (block, i) { return ce(Block, { key: selectedTitle + '/' + i, block: block, graph: graph, learn: props.learn }); }));
+    // Without the `key` above, React confuses different docs: the props are ok but the reducer state is wrong. Why?
 }
 function Quiz() { return ce('p', null, 'Quizzing!'); }
 function Main() {
@@ -203,7 +221,10 @@ function Main() {
     }
     var defaultState = 'edit';
     var _c = __read(react_1.useState(defaultState), 2), state = _c[0], setState = _c[1];
-    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, { docs: docs });
+    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, {
+        docs: docs,
+        learn: function (keys, graph) { return db ? web.learnQuizzes(db, keys, graph) : 0; },
+    });
     var setStateDebounce = function (x) { return (x !== state) && setState(x); };
     return ce('div', null, ce('button', { onClick: function () { return setStateDebounce('edit'); } }, 'Edit'), ce('button', { onClick: function () { return setStateDebounce('learn'); } }, 'Learn'), ce('button', { onClick: function () { return setStateDebounce('quiz'); } }, 'Quiz'), ce('div', null, body));
 }

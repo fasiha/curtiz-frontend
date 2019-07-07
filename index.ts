@@ -15,6 +15,54 @@ const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu;
 
+type BlockState = {
+  learned: (boolean|undefined)[],
+};
+type BlockAction = {
+  type: 'learn',
+  payload: number,
+  learn: () => any,
+};
+
+function blockReducer(state: BlockState, action: BlockAction): BlockState {
+  if (action.type === 'learn') {
+    state.learned[action.payload] = true;
+    action.learn();
+    return {...state};
+  } else {
+    throw new Error('unknown action');
+  }
+}
+
+function Block(props: {block: string[], graph: GraphType, learn: (keys: string[], graph: GraphType) => any}) {
+  const raw = props.block.map((line, lino) => props.block[0] + (lino ? '\n' + line : ''));
+  const learned = (x: string) => isRawLearned(x, props.graph);
+  const learnable = (x: string) => isRawLearnable(x, props.graph);
+  const init: BlockState = {learned: raw.map(r => learnable(r) ? learned(r) : undefined)};
+  const [state, dispatch] = useReducer(blockReducer, init);
+  return ce(
+      'ul',
+      null,
+      props.block.map((line, i) => ce(
+                          'li',
+                          {key: i},
+                          line,
+                          state.learned[i] === undefined
+                              ? ''
+                              : (state.learned[i] ? ' [learned!] '
+                                                  : ce('button', {
+                                                      onClick: () => dispatch({
+                                                        type: 'learn',
+                                                        payload: i,
+                                                        learn: () => props.learn(
+                                                            Array.from(props.graph.raws.get(raw[i]) || []), props.graph)
+                                                      })
+                                                    },
+                                                       'Learn')),
+                          )),
+  )
+}
+
 function Learn(props: {docs: DocsGraphs, learn: (keys: string[], graph: GraphType) => any}) {
   const titles = Array.from(props.docs.docs.keys());
   const initialTitle = titles[0];
@@ -32,28 +80,13 @@ function Learn(props: {docs: DocsGraphs, learn: (keys: string[], graph: GraphTyp
                                  'select'))));
 
   const blocks = markdownToBlocks(doc.content);
-  const raws = flatten(blocks.map(block => block.map((line, lino) => block[0] + (lino ? '\n' + line : ''))));
-  const lines = flatten(blocks);
-  const learned = (x: string) => isRawLearned(x, graph);
-  const learnable = (x: string) => isRawLearnable(x, graph);
   return ce(
       'div',
       null,
       list,
-      ce(
-          'ul',
-          null,
-          lines.map((line, i) => ce(
-                        'li', {key: i}, line,
-                        (learnable(raws[i])
-                             ? (learned(raws[i])
-                                    ? ' [learned!] '
-                                    : ce('button',
-                                         {onClick: () => props.learn(Array.from(graph.raws.get(raws[i]) || []), graph)},
-                                         'learn'))
-                             : ''))),
-          ),
+      blocks.map((block, i) => ce(Block, {key: selectedTitle + '/' + i, block, graph, learn: props.learn})),
   );
+  // Without the `key` above, React confuses different docs: the props are ok but the reducer state is wrong. Why?
 }
 
 function Quiz() { return ce('p', null, 'Quizzing!'); }
