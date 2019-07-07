@@ -1,7 +1,7 @@
 import {AbstractIterator} from 'abstract-leveldown';
-import {QuizGraph, textToGraph} from 'curtiz-parse-markdown';
-import {KeyToEbisu} from 'curtiz-quiz-planner'
-import {flatten, partitionBy} from 'curtiz-utils';
+import {Quiz, QuizGraph} from 'curtiz-parse-markdown';
+import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
+import {partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
@@ -71,7 +71,56 @@ function Learn(props: {doc: Doc, graph: GraphType, learn: (keys: string[]) => an
   // Without `key` above, React doesn't properly handle the reducer.
 }
 
-function Quiz() { return ce('p', null, 'Quizzing!'); }
+function wrap(s: string) { return `_(${s})_` }
+
+function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string) => any}) {
+  const quiz = props.quiz;
+  let grader: (s: string) => boolean;
+  let prompt = '';
+  if (quiz.kind === 'cloze') {
+    let promptIdx = 0;
+    prompt = (quiz.contexts.map(context => context === null ? (quiz.prompts && wrap(quiz.prompts[promptIdx++]) || '___')
+                                                            : context))
+                 .join('');
+    if (quiz.translation && quiz.translation.en) { prompt += ` (${quiz.translation.en})`; }
+    grader = (s: string) => s === quiz.clozes[0][0];
+
+  } else if (quiz.kind === 'card') {
+    prompt = quiz.prompt + ((quiz.translation && quiz.translation.en) ? ` (${quiz.translation.en})` : '');
+    grader = (s: string) => quiz.responses.includes(s);
+  } else {
+    throw new Error('unknown quiz type');
+  }
+
+  const [input, setInput] = useState('');
+
+  return ce('div', null, prompt,
+            ce('input', {value: input, type: 'text', name: 'name', onChange: e => setInput(e.target.value)}),
+            ce('button', {
+              onClick: () => {
+                props.update(grader(input), quiz.uniqueId);
+                setInput('');
+              }
+            },
+               'Submit'));
+}
+
+function Quizzer(props: {doc: Doc, graph: GraphType, update: (result: boolean, key: string) => any}) {
+  const [quiz, setQuiz] = useState(undefined as Quiz | undefined);
+  if (quiz === undefined) {
+    const bestQuiz = whichToQuiz(props.graph);
+    if (bestQuiz !== quiz) { setQuiz(bestQuiz); }
+  }
+
+  if (!quiz) { return ce('p', null, 'Nothing to quiz for this document!'); }
+  return ce(AQuiz, {
+    update: (result: boolean, key: string) => {
+      props.update(result, key);
+      setQuiz(whichToQuiz(props.graph));
+    },
+    quiz
+  });
+}
 
 type AppState = 'edit'|'learn'|'quiz';
 interface DocsGraphs extends Docs {
@@ -121,7 +170,14 @@ function Main() {
   const learn = (doc && graph)
                     ? ce(Learn, {doc, graph, learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0})
                     : '';
-  const body = state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? ce(Quiz, {}) : learn;
+  const quiz = (doc && graph) ? ce(Quizzer, {
+    key: selectedTitle,
+    doc,
+    graph,
+    update: (result: boolean, key: string) => web.updateQuiz(db as Db, result, key, graph)
+  })
+                              : '';
+  const body = state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? quiz : learn;
 
   const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
   return ce(

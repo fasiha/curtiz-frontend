@@ -188,6 +188,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+var curtiz_quiz_planner_1 = require("curtiz-quiz-planner");
 var curtiz_utils_1 = require("curtiz-utils");
 var web = __importStar(require("curtiz-web-db"));
 var react_1 = __importStar(require("react"));
@@ -229,7 +230,55 @@ function Learn(props) {
     }));
     // Without `key` above, React doesn't properly handle the reducer.
 }
-function Quiz() { return ce('p', null, 'Quizzing!'); }
+function wrap(s) { return "_(" + s + ")_"; }
+function AQuiz(props) {
+    var quiz = props.quiz;
+    var grader;
+    var prompt = '';
+    if (quiz.kind === 'cloze') {
+        var promptIdx_1 = 0;
+        prompt = (quiz.contexts.map(function (context) { return context === null ? (quiz.prompts && wrap(quiz.prompts[promptIdx_1++]) || '___')
+            : context; }))
+            .join('');
+        if (quiz.translation && quiz.translation.en) {
+            prompt += " (" + quiz.translation.en + ")";
+        }
+        grader = function (s) { return s === quiz.clozes[0][0]; };
+    }
+    else if (quiz.kind === 'card') {
+        prompt = quiz.prompt + ((quiz.translation && quiz.translation.en) ? " (" + quiz.translation.en + ")" : '');
+        grader = function (s) { return quiz.responses.includes(s); };
+    }
+    else {
+        throw new Error('unknown quiz type');
+    }
+    var _a = __read(react_1.useState(''), 2), input = _a[0], setInput = _a[1];
+    return ce('div', null, prompt, ce('input', { value: input, type: 'text', name: 'name', onChange: function (e) { return setInput(e.target.value); } }), ce('button', {
+        onClick: function () {
+            props.update(grader(input), quiz.uniqueId);
+            setInput('');
+        }
+    }, 'Submit'));
+}
+function Quizzer(props) {
+    var _a = __read(react_1.useState(undefined), 2), quiz = _a[0], setQuiz = _a[1];
+    if (quiz === undefined) {
+        var bestQuiz = curtiz_quiz_planner_1.whichToQuiz(props.graph);
+        if (bestQuiz !== quiz) {
+            setQuiz(bestQuiz);
+        }
+    }
+    if (!quiz) {
+        return ce('p', null, 'Nothing to quiz for this document!');
+    }
+    return ce(AQuiz, {
+        update: function (result, key) {
+            props.update(result, key);
+            setQuiz(curtiz_quiz_planner_1.whichToQuiz(props.graph));
+        },
+        quiz: quiz
+    });
+}
 function Main() {
     var _a = __read(react_1.useState(undefined), 2), db = _a[0], setDb = _a[1];
     var defaultDocsGraphs = { docs: new Map(), graphs: new Map() };
@@ -321,7 +370,14 @@ function Main() {
     var learn = (doc && graph)
         ? ce(Learn, { doc: doc, graph: graph, learn: function (keys) { return db ? web.learnQuizzes(db, keys, graph) : 0; } })
         : '';
-    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? ce(Quiz, {}) : learn;
+    var quiz = (doc && graph) ? ce(Quizzer, {
+        key: selectedTitle,
+        doc: doc,
+        graph: graph,
+        update: function (result, key) { return web.updateQuiz(db, result, key, graph); }
+    })
+        : '';
+    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? quiz : learn;
     var setStateDebounce = function (x) { return (x !== state) && setState(x); };
     return ce('div', null, ce('button', { onClick: function () { return setStateDebounce('edit'); } }, 'Edit'), ce('button', { onClick: function () { return setStateDebounce('learn'); } }, 'Learn'), ce('button', { onClick: function () { return setStateDebounce('quiz'); } }, 'Quiz'), ce('div', null, listOfDocs, body));
 }
@@ -356,7 +412,7 @@ function isRawLearned(raw, GRAPH) {
 }
 function isRawLearnable(raw, GRAPH) { return GRAPH.raws.has(raw); }
 
-},{"./Edit":1,"./docs":2,"curtiz-utils":161,"curtiz-web-db":162,"react":215,"react-dom":212}],4:[function(require,module,exports){
+},{"./Edit":1,"./docs":2,"curtiz-quiz-planner":158,"curtiz-utils":161,"curtiz-web-db":162,"react":215,"react-dom":212}],4:[function(require,module,exports){
 /**
 * @license Apache-2.0
 *
