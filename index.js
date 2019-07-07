@@ -61,10 +61,6 @@ var __read = (this && this.__read) || function (o, n) {
     }
     return ar;
 };
-var __spread = (this && this.__spread) || function () {
-    for (var ar = [], i = 0; i < arguments.length; i++) ar = ar.concat(__read(arguments[i]));
-    return ar;
-};
 var __values = (this && this.__values) || function (o) {
     var m = typeof Symbol === "function" && o[Symbol.iterator], i = 0;
     if (m) return m.call(o);
@@ -121,23 +117,11 @@ function Block(props) {
             }, 'Learn'))); }));
 }
 function Learn(props) {
-    var titles = Array.from(props.docs.docs.keys());
-    var initialTitle = titles[0];
-    var _a = __read(react_1.useState(initialTitle), 2), selectedTitle = _a[0], setSelectedTitle = _a[1];
-    if (!selectedTitle) {
-        return ce('p', null, 'Go to Edit & add a document');
-    }
-    var doc = props.docs.docs.get(selectedTitle);
-    var graph = props.docs.graphs.get(selectedTitle);
-    if (!(doc && graph)) {
-        throw new Error('typescript pacification turned out to be necessary');
-    }
-    var list = ce.apply(void 0, __spread(['ul', null], titles.map(function (title) {
-        return ce('li', null, title, ce('button', { disabled: title === selectedTitle, onClick: function () { return setSelectedTitle(title); } }, 'select'));
-    })));
-    var blocks = markdownToBlocks(doc.content);
-    return ce('div', null, list, blocks.map(function (block, i) { return ce(Block, { key: selectedTitle + '/' + i, block: block, graph: graph, learn: props.learn }); }));
-    // Without the `key` above, React confuses different docs: the props are ok but the reducer state is wrong. Why?
+    var blocks = markdownToBlocks(props.doc.content);
+    return ce('div', null, blocks.map(function (block, i) {
+        return ce(Block, { key: props.doc.title + '/' + i, block: block, graph: props.graph, learn: props.learn });
+    }));
+    // Without `key` above, React doesn't properly handle the reducer.
 }
 function Quiz() { return ce('p', null, 'Quizzing!'); }
 function Main() {
@@ -146,7 +130,7 @@ function Main() {
     var _b = __read(react_1.useState(defaultDocsGraphs), 2), docs = _b[0], setDocs = _b[1];
     function loader() {
         return __awaiter(this, void 0, void 0, function () {
-            var newdb, newdocs, _a, date, newName, _b, _c, _d, key, doc, _e, _f, _g, e_1_1;
+            var newdb, newdocs, _a, date, newName, _b, _c, _d, key, doc_1, _e, _f, _g, e_1_1;
             var e_1, _h;
             return __generator(this, function (_j) {
                 switch (_j.label) {
@@ -169,10 +153,10 @@ function Main() {
                         _j.label = 3;
                     case 3:
                         if (!!_c.done) return [3 /*break*/, 6];
-                        _d = __read(_c.value, 2), key = _d[0], doc = _d[1];
+                        _d = __read(_c.value, 2), key = _d[0], doc_1 = _d[1];
                         _f = (_e = newdocs.graphs).set;
                         _g = [key];
-                        return [4 /*yield*/, web.initialize(newdb, doc.content)];
+                        return [4 /*yield*/, web.initialize(newdb, doc_1.content)];
                     case 4:
                         _f.apply(_e, _g.concat([_j.sent()]));
                         _j.label = 5;
@@ -191,7 +175,6 @@ function Main() {
                         finally { if (e_1) throw e_1.error; }
                         return [7 /*endfinally*/];
                     case 9:
-                        newdocs.graphs;
                         setDocs(newdocs);
                         return [2 /*return*/];
                 }
@@ -221,12 +204,20 @@ function Main() {
     }
     var defaultState = 'edit';
     var _c = __read(react_1.useState(defaultState), 2), state = _c[0], setState = _c[1];
-    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? ce(Quiz, {}) : ce(Learn, {
-        docs: docs,
-        learn: function (keys, graph) { return db ? web.learnQuizzes(db, keys, graph) : 0; },
-    });
+    var _d = __read(react_1.useState(undefined), 2), selectedTitle = _d[0], setSelectedTitle = _d[1];
+    var titles = Array.from(docs.docs.keys());
+    if (selectedTitle === undefined && titles[0] !== undefined) {
+        setSelectedTitle(titles[0]);
+    }
+    var listOfDocs = ce('ul', null, titles.map(function (title) { return ce('li', { key: title }, title, ce('button', { disabled: title === selectedTitle, onClick: function () { return setSelectedTitle(title); } }, 'select')); }));
+    var doc = docs.docs.get(selectedTitle || '');
+    var graph = docs.graphs.get(selectedTitle || '');
+    var learn = (doc && graph)
+        ? ce(Learn, { doc: doc, graph: graph, learn: function (keys) { return db ? web.learnQuizzes(db, keys, graph) : 0; } })
+        : '';
+    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? ce(Quiz, {}) : learn;
     var setStateDebounce = function (x) { return (x !== state) && setState(x); };
-    return ce('div', null, ce('button', { onClick: function () { return setStateDebounce('edit'); } }, 'Edit'), ce('button', { onClick: function () { return setStateDebounce('learn'); } }, 'Learn'), ce('button', { onClick: function () { return setStateDebounce('quiz'); } }, 'Quiz'), ce('div', null, body));
+    return ce('div', null, ce('button', { onClick: function () { return setStateDebounce('edit'); } }, 'Edit'), ce('button', { onClick: function () { return setStateDebounce('learn'); } }, 'Learn'), ce('button', { onClick: function () { return setStateDebounce('quiz'); } }, 'Quiz'), ce('div', null, listOfDocs, body));
 }
 react_dom_1.default.render(ce(Main), document.getElementById('root'));
 function markdownToBlocks(md) {
