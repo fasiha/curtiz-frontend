@@ -290,8 +290,8 @@ function Main() {
     var _b = __read(react_1.useState(defaultDocsGraphs), 2), docs = _b[0], setDocs = _b[1];
     function loader() {
         return __awaiter(this, void 0, void 0, function () {
-            var newdb, newdocs, _a, date, newName, _b, _c, _d, key, doc_1, _e, _f, _g, e_1_1;
-            var e_1, _h;
+            var newdb, newdocs, _a, date, newName, _b, _c, _d, key, doc_1, _e, _f, _g, e_1, e_2_1;
+            var e_2, _h;
             return __generator(this, function (_j) {
                 switch (_j.label) {
                     case 0:
@@ -308,33 +308,41 @@ function Main() {
                         }
                         _j.label = 2;
                     case 2:
-                        _j.trys.push([2, 7, 8, 9]);
+                        _j.trys.push([2, 9, 10, 11]);
                         _b = __values(newdocs.docs), _c = _b.next();
                         _j.label = 3;
                     case 3:
-                        if (!!_c.done) return [3 /*break*/, 6];
+                        if (!!_c.done) return [3 /*break*/, 8];
                         _d = __read(_c.value, 2), key = _d[0], doc_1 = _d[1];
+                        _j.label = 4;
+                    case 4:
+                        _j.trys.push([4, 6, , 7]);
                         _f = (_e = newdocs.graphs).set;
                         _g = [key];
                         return [4 /*yield*/, web.initialize(newdb, doc_1.content)];
-                    case 4:
-                        _f.apply(_e, _g.concat([_j.sent()]));
-                        _j.label = 5;
                     case 5:
+                        _f.apply(_e, _g.concat([_j.sent()]));
+                        return [3 /*break*/, 7];
+                    case 6:
+                        e_1 = _j.sent();
+                        alert('Error caught. See JS Console');
+                        console.error('Error analyzing text. Skipping', e_1);
+                        return [3 /*break*/, 7];
+                    case 7:
                         _c = _b.next();
                         return [3 /*break*/, 3];
-                    case 6: return [3 /*break*/, 9];
-                    case 7:
-                        e_1_1 = _j.sent();
-                        e_1 = { error: e_1_1 };
-                        return [3 /*break*/, 9];
-                    case 8:
+                    case 8: return [3 /*break*/, 11];
+                    case 9:
+                        e_2_1 = _j.sent();
+                        e_2 = { error: e_2_1 };
+                        return [3 /*break*/, 11];
+                    case 10:
                         try {
                             if (_c && !_c.done && (_h = _b.return)) _h.call(_b);
                         }
-                        finally { if (e_1) throw e_1.error; }
+                        finally { if (e_2) throw e_2.error; }
                         return [7 /*endfinally*/];
-                    case 9:
+                    case 11:
                         setDocs(newdocs);
                         return [2 /*return*/];
                 }
@@ -344,7 +352,7 @@ function Main() {
     react_1.useEffect(function () { loader(); }, [0]);
     function updateDoc(doc) {
         return __awaiter(this, void 0, void 0, function () {
-            var _a, _b, _c;
+            var _a, _b, _c, e_3;
             return __generator(this, function (_d) {
                 switch (_d.label) {
                     case 0:
@@ -352,12 +360,21 @@ function Main() {
                             throw new Error('cannot update doc when db undefined');
                         }
                         docs_1.saveDoc(db, docs_1.DOCS_PREFIX, doc); // No log FIXME
+                        _d.label = 1;
+                    case 1:
+                        _d.trys.push([1, 3, , 4]);
                         _b = (_a = docs.graphs).set;
                         _c = [doc.title];
                         return [4 /*yield*/, web.initialize(db, doc.content)];
-                    case 1:
+                    case 2:
                         _b.apply(_a, _c.concat([_d.sent()]));
-                        return [2 /*return*/];
+                        return [3 /*break*/, 4];
+                    case 3:
+                        e_3 = _d.sent();
+                        alert('Error caught. See JS Console');
+                        console.error('Error analyzing text. Skipping', e_3);
+                        return [3 /*break*/, 4];
+                    case 4: return [2 /*return*/];
                 }
             });
         });
@@ -393,7 +410,7 @@ function markdownToBlocks(md) {
     return headers;
 }
 function isRawLearned(raw, GRAPH) {
-    var e_2, _a;
+    var e_4, _a;
     var set = GRAPH.raws.get(raw);
     if (!set) {
         return false;
@@ -406,12 +423,12 @@ function isRawLearned(raw, GRAPH) {
             }
         }
     }
-    catch (e_2_1) { e_2 = { error: e_2_1 }; }
+    catch (e_4_1) { e_4 = { error: e_4_1 }; }
     finally {
         try {
             if (set_1_1 && !set_1_1.done && (_a = set_1.return)) _a.call(set_1);
         }
-        finally { if (e_2) throw e_2.error; }
+        finally { if (e_4) throw e_4.error; }
     }
     return false;
 }

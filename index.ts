@@ -148,7 +148,14 @@ function Main() {
       const newName = 'New ' + date.toISOString();
       newdocs.docs.set(newName, {title: newName, content: '(empty)', source: undefined, modified: date});
     }
-    for (const [key, doc] of newdocs.docs) { newdocs.graphs.set(key, await web.initialize(newdb, doc.content)); }
+    for (const [key, doc] of newdocs.docs) {
+      try {
+        newdocs.graphs.set(key, await web.initialize(newdb, doc.content));
+      } catch (e) {
+        alert('Error caught. See JS Console');
+        console.error('Error analyzing text. Skipping', e);
+      }
+    }
     setDocs(newdocs);
   }
   useEffect(() => { loader(); }, [0]);
@@ -156,7 +163,12 @@ function Main() {
   async function updateDoc(doc: Doc) {
     if (!db) { throw new Error('cannot update doc when db undefined'); }
     saveDoc(db, DOCS_PREFIX, doc); // No log FIXME
-    docs.graphs.set(doc.title, await web.initialize(db, doc.content));
+    try {
+      docs.graphs.set(doc.title, await web.initialize(db, doc.content));
+    } catch (e) {
+      alert('Error caught. See JS Console');
+      console.error('Error analyzing text. Skipping', e);
+    }
   }
 
   const defaultState: AppState = 'edit';
