@@ -1,7 +1,7 @@
 import {AbstractIterator} from 'abstract-leveldown';
 import {Quiz, QuizGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
-import {mapRight, partitionBy} from 'curtiz-utils';
+import {kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
@@ -72,7 +72,9 @@ function Learn(props: {doc: Doc, graph: GraphType, learn: (keys: string[]) => an
 }
 
 function wrap(s: string) { return `_(${s})_` }
-
+function crossMatch(long: string[], short: string[]): boolean {
+  return long.length >= short.length ? long.some(a => short.includes(a)) : crossMatch(short, long);
+}
 function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summary: string) => any}) {
   const quiz = props.quiz;
   let grader: (s: string) => boolean;
@@ -83,11 +85,11 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
                                                             : context))
                  .join('');
     if (quiz.translation && quiz.translation.en) { prompt += ` (${quiz.translation.en})`; }
-    grader = (s: string) => s === quiz.clozes[0][0];
+    grader = (s: string) => crossMatch(quiz.clozes[0], [s, kata2hira(s)]);
 
   } else if (quiz.kind === 'card') {
     prompt = quiz.prompt + ((quiz.translation && quiz.translation.en) ? ` (${quiz.translation.en})` : '');
-    grader = (s: string) => quiz.responses.includes(s);
+    grader = (s: string) => crossMatch(quiz.responses.concat(quiz.prompt), [s, kata2hira(s)]);
   } else {
     throw new Error('unknown quiz type');
   }
