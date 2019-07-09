@@ -113,16 +113,20 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
 function Quizzer(props: {doc: Doc, graph: GraphType, update: (result: boolean, key: string) => any}) {
   const [quiz, setQuiz] = useState(undefined as Quiz | undefined);
   if (quiz === undefined) {
+    // const details = {} as any;
+    // const bestQuiz = whichToQuiz(props.graph, {details});
     const bestQuiz = whichToQuiz(props.graph);
     if (bestQuiz !== quiz) { setQuiz(bestQuiz); }
+    // console.log('recalculating', details);
   }
+  // console.log('rerunning')
   const [pastResults, setPastResults] = useState([] as string[]);
 
   if (!quiz) { return ce('p', null, 'Nothing to quiz for this document!'); }
   return ce('div', null, ce(AQuiz, {
               update: (result: boolean, key: string, summary: string) => {
                 props.update(result, key);
-                setQuiz(whichToQuiz(props.graph));
+                setQuiz(undefined); // invalidate
                 setPastResults(pastResults.concat(summary));
               },
               quiz
@@ -185,6 +189,7 @@ function Main() {
                              ce('button', {disabled: title === selectedTitle, onClick: () => setSelectedTitle(title)},
                                 'select'))));
 
+  const [updateTrigger, setUpdateTrigger] = useState(0);
   const doc = docs.docs.get(selectedTitle || '');
   const graph = docs.graphs.get(selectedTitle || '');
   const learn = (doc && graph)
@@ -194,12 +199,18 @@ function Main() {
     key: selectedTitle,
     doc,
     graph,
+    updateTrigger,
     update: (result: boolean, key: string) => web.updateQuiz(db as Db, result, key, graph)
   })
                               : '';
   const body = state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? quiz : learn;
 
-  const setStateDebounce = (x: AppState) => (x !== state) && setState(x);
+  const setStateDebounce = (x: AppState) => {
+    if (x !== state) {
+      setState(x);
+      setUpdateTrigger(updateTrigger + 1);
+    }
+  };
   return ce(
       'div',
       null,
