@@ -8,12 +8,12 @@ import {LevelUp} from 'levelup';
 import React, {useEffect, useReducer, useState} from 'react';
 import ReactDOM from 'react-dom';
 
-import {Doc, Docs, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
+import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
 import {Edit} from './Edit';
 
 const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
-type GraphType = QuizGraph&KeyToEbisu;
+type GraphType = QuizGraph&KeyToEbisu&{doc: Doc};
 
 type BlockState = {
   learned: (boolean|undefined)[],
@@ -63,11 +63,12 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
   )
 }
 
-function Learn(props: {doc: Doc, graph: GraphType, learn: (keys: string[]) => any}) {
-  const blocks = markdownToBlocks(props.doc.content);
-  return ce('div', null,
-            blocks.map((block, i) =>
-                           ce(Block, {key: props.doc.title + '/' + i, block, graph: props.graph, learn: props.learn})));
+function Learn(props: {graph: GraphType, learn: (keys: string[]) => any}) {
+  const blocks = markdownToBlocks(props.graph.doc.content);
+  return ce(
+      'div', null,
+      blocks.map((block, i) =>
+                     ce(Block, {key: props.graph.doc.title + '/' + i, block, graph: props.graph, learn: props.learn})));
   // Without `key` above, React doesn't properly handle the reducer.
 }
 
@@ -110,7 +111,7 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
                'Submit'));
 }
 
-function Quizzer(props: {doc: Doc, graph: GraphType, update: (result: boolean, key: string) => any}) {
+function Quizzer(props: {graph: GraphType, update: (result: boolean, key: string) => any}) {
   const [quiz, setQuiz] = useState(undefined as Quiz | undefined);
   if (quiz === undefined) {
     // const details = {} as any;
@@ -135,34 +136,33 @@ function Quizzer(props: {doc: Doc, graph: GraphType, update: (result: boolean, k
 }
 
 type AppState = 'edit'|'learn'|'quiz';
-interface DocsGraphs extends Docs {
-  graphs: Map<string, GraphType>;
-}
+type GraphsMap = Map<string, GraphType>;
 
 function Main() {
   const [db, setDb] = useState(undefined as Db | undefined);
-  const defaultDocsGraphs: DocsGraphs = {docs: new Map(), graphs: new Map()};
-  const [docs, setDocs] = useState(defaultDocsGraphs);
+  const defaultGraphsMap: GraphsMap = new Map();
+  const [graphsMap, setGraphsMap] = useState(defaultGraphsMap);
 
   async function loader() {
     const newdb = db || web.setup('testing');
     setDb(newdb);
 
-    const newdocs: DocsGraphs = {...await loadDocs(newdb, DOCS_PREFIX), graphs: new Map()};
-    {
+    const docs = await loadDocs(newdb, DOCS_PREFIX);
+    { // add new empty doc for editing
       const date = new Date();
       const newName = 'New ' + date.toISOString();
-      newdocs.docs.set(newName, {title: newName, content: '(empty)', source: undefined, modified: date});
+      docs.push({title: newName, content: '(empty)', source: undefined, modified: date});
     }
-    for (const [key, doc] of newdocs.docs) {
+    const graphs: GraphsMap = new Map();
+    for (const doc of docs) {
       try {
-        newdocs.graphs.set(key, await web.initialize(newdb, doc.content));
+        graphs.set(doc.title, {...await web.initialize(newdb, doc.content), doc});
       } catch (e) {
         alert('Error caught. See JS Console');
         console.error('Error analyzing text. Skipping', e);
       }
     }
-    setDocs(newdocs);
+    setGraphsMap(graphs);
   }
   useEffect(() => { loader(); }, [0]);
 
@@ -170,7 +170,7 @@ function Main() {
     if (!db) { throw new Error('cannot update doc when db undefined'); }
     saveDoc(db, DOCS_PREFIX, doc); // No log FIXME
     try {
-      docs.graphs.set(doc.title, await web.initialize(db, doc.content));
+      graphsMap.set(doc.title, {...await web.initialize(db, doc.content), doc});
     } catch (e) {
       alert('Error caught. See JS Console');
       console.error('Error analyzing text. Skipping', e);
@@ -181,7 +181,7 @@ function Main() {
   const [state, setState] = useState(defaultState as AppState);
 
   const [selectedTitle, setSelectedTitle] = useState(undefined as string | undefined);
-  const titles = Array.from(docs.docs.keys());
+  const titles = Array.from(graphsMap.keys());
   if (selectedTitle === undefined && titles[0] !== undefined) { setSelectedTitle(titles[0]) }
   const listOfDocs = ce(
       'ul', null,
@@ -190,20 +190,17 @@ function Main() {
                                 'select'))));
 
   const [updateTrigger, setUpdateTrigger] = useState(0);
-  const doc = docs.docs.get(selectedTitle || '');
-  const graph = docs.graphs.get(selectedTitle || '');
-  const learn = (doc && graph)
-                    ? ce(Learn, {doc, graph, learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0})
-                    : '';
-  const quiz = (doc && graph) ? ce(Quizzer, {
+  const graph = graphsMap.get(selectedTitle || '');
+  const learn = graph ? ce(Learn, {graph, learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0}) : '';
+  const quiz = (graph) ? ce(Quizzer, {
     key: selectedTitle,
-    doc,
     graph,
     updateTrigger,
     update: (result: boolean, key: string) => web.updateQuiz(db as Db, result, key, graph)
   })
-                              : '';
-  const body = state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? quiz : learn;
+                       : '';
+  const body = state === 'edit' ? ce(Edit, {docs: Array.from(graphsMap.values(), graph => graph.doc), updateDoc})
+                                : state === 'quiz' ? quiz : learn;
 
   const setStateDebounce = (x: AppState) => {
     if (x !== state) {

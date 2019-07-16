@@ -1,6 +1,6 @@
-import React, {useEffect, useReducer, useState} from 'react';
+import React, {useState} from 'react';
 
-import {Db, Doc, Docs, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
+import {Doc} from './docs';
 
 const ce = React.createElement;
 
@@ -28,8 +28,6 @@ function EditableDoc(props: {doc: Doc, updateDoc: (doc: Doc) => any}) {
   )
 }
 
-export function Edit(props: {docs: Docs, updateDoc: (doc: Doc) => any}) {
-  const rv = [];
-  for (const doc of props.docs.docs.values()) { rv.push(ce(EditableDoc, {doc, updateDoc: props.updateDoc})); }
-  return ce('div', null, ...rv);
+export function Edit(props: {docs: Doc[], updateDoc: (doc: Doc) => any}) {
+  return ce('div', null, ...props.docs.map(doc => ce(EditableDoc, {doc, updateDoc: props.updateDoc})));
 }
