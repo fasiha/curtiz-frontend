@@ -11,7 +11,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "Unlicense",
   "devDependencies": {
     "@types/abstract-leveldown": "^5.0.1",
     "@types/level-js": "^4.0.1",

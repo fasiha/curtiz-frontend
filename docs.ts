@@ -27,4 +27,10 @@ export function loadDocs(db: Db, prefix: string): Promise<Doc[]> {
   });
 }
 
-export function saveDoc(db: Db, prefix: string, doc: Doc): Promise<void> { return db.put(prefix + doc.title, doc); }
+export function saveDoc(db: Db, prefix: string, eventPrefix: string, doc: Doc): Promise<void> {
+  const uid = doc.title + '-' + Math.random().toString(36).slice(2);
+  return db.batch([
+    {type: 'put', key: prefix + doc.title, value: doc},
+    {type: 'put', key: eventPrefix + uid, value: {...doc, uid}},
+  ]);
+}

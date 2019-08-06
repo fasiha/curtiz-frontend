@@ -1,5 +1,5 @@
 import {AbstractIterator} from 'abstract-leveldown';
-import {Quiz, QuizGraph} from 'curtiz-parse-markdown';
+import {Quiz, QuizGraph, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
 import {kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
@@ -43,23 +43,22 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
   return ce(
       'ul',
       null,
-      props.block.map((line, i) => ce(
-                          'li',
-                          {key: i},
-                          line,
-                          state.learned[i] === undefined
-                              ? ''
-                              : (state.learned[i] ? ' [learned!] '
-                                                  : ce('button', {
-                                                      onClick: () => dispatch({
-                                                        type: 'learn',
-                                                        payload: i,
-                                                        learn: () => props.learn(
-                                                            Array.from(props.graph.raws.get(raw[i]) || []), props.graph)
-                                                      })
-                                                    },
-                                                       'Learn')),
-                          )),
+      props.block.map((line, i) => {
+        const keys = Array.from(props.graph.raws.get(raw[i]) || []);
+        return ce(
+            'li',
+            {key: i},
+            line,
+            state.learned[i] === undefined
+                ? ''
+                : (state.learned[i] ? ' [learned!] '
+                                    : ce('button', {
+                                        onClick: () => dispatch(
+                                            {type: 'learn', payload: i, learn: () => props.learn(keys, props.graph)})
+                                      },
+                                         `Learn ${keys.length}`)),
+        );
+      }),
   )
 }
 
@@ -168,7 +167,7 @@ function Main() {
 
   async function updateDoc(doc: Doc) {
     if (!db) { throw new Error('cannot update doc when db undefined'); }
-    saveDoc(db, DOCS_PREFIX, doc); // No log FIXME
+    saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, doc);
     try {
       graphsMap.set(doc.title, {...await web.initialize(db, doc.content), doc});
     } catch (e) {

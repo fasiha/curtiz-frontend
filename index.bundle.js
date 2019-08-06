@@ -51,8 +51,19 @@ function Edit(props) {
 }
 exports.Edit = Edit;
 
-},{"react":264}],2:[function(require,module,exports){
+},{"react":266}],2:[function(require,module,exports){
 "use strict";
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 function rehydrateDoc(nominalDoc) {
     if (nominalDoc.modified instanceof Date) {
@@ -72,7 +83,13 @@ function loadDocs(db, prefix) {
     });
 }
 exports.loadDocs = loadDocs;
-function saveDoc(db, prefix, doc) { return db.put(prefix + doc.title, doc); }
+function saveDoc(db, prefix, eventPrefix, doc) {
+    var uid = doc.title + '-' + Math.random().toString(36).slice(2);
+    return db.batch([
+        { type: 'put', key: prefix + doc.title, value: doc },
+        { type: 'put', key: eventPrefix + uid, value: __assign({}, doc, { uid: uid }) },
+    ]);
+}
 exports.saveDoc = saveDoc;
 
 },{}],3:[function(require,module,exports){
@@ -184,16 +201,15 @@ function Block(props) {
     var learnable = function (x) { return isRawLearnable(x, props.graph); };
     var init = { learned: raw.map(function (r) { return learnable(r) ? learned(r) : undefined; }) };
     var _a = __read(react_1.useReducer(blockReducer, init), 2), state = _a[0], dispatch = _a[1];
-    return ce('ul', null, props.block.map(function (line, i) { return ce('li', { key: i }, line, state.learned[i] === undefined
-        ? ''
-        : (state.learned[i] ? ' [learned!] '
-            : ce('button', {
-                onClick: function () { return dispatch({
-                    type: 'learn',
-                    payload: i,
-                    learn: function () { return props.learn(Array.from(props.graph.raws.get(raw[i]) || []), props.graph); }
-                }); }
-            }, 'Learn'))); }));
+    return ce('ul', null, props.block.map(function (line, i) {
+        var keys = Array.from(props.graph.raws.get(raw[i]) || []);
+        return ce('li', { key: i }, line, state.learned[i] === undefined
+            ? ''
+            : (state.learned[i] ? ' [learned!] '
+                : ce('button', {
+                    onClick: function () { return dispatch({ type: 'learn', payload: i, learn: function () { return props.learn(keys, props.graph); } }); }
+                }, "Learn " + keys.length)));
+    }));
 }
 function Learn(props) {
     var blocks = markdownToBlocks(props.graph.doc.content);
@@ -339,7 +355,7 @@ function Main() {
                         if (!db) {
                             throw new Error('cannot update doc when db undefined');
                         }
-                        docs_1.saveDoc(db, docs_1.DOCS_PREFIX, doc); // No log FIXME
+                        docs_1.saveDoc(db, docs_1.DOCS_PREFIX, web.EVENT_PREFIX, doc);
                         _e.label = 1;
                     case 1:
                         _e.trys.push([1, 3, , 4]);
@@ -419,7 +435,7 @@ function isRawLearned(raw, GRAPH) {
 }
 function isRawLearnable(raw, GRAPH) { return GRAPH.raws.has(raw); }
 
-},{"./Edit":1,"./docs":2,"curtiz-quiz-planner":203,"curtiz-utils":204,"curtiz-web-db":206,"react":264,"react-dom":261}],4:[function(require,module,exports){
+},{"./Edit":1,"./docs":2,"curtiz-quiz-planner":204,"curtiz-utils":205,"curtiz-web-db":207,"react":266,"react-dom":263}],4:[function(require,module,exports){
 /**
 * @license Apache-2.0
 *
@@ -13514,7 +13530,7 @@ AbstractIterator.prototype._end = function (callback) {
 module.exports = AbstractIterator
 
 }).call(this,require('_process'))
-},{"_process":255}],190:[function(require,module,exports){
+},{"_process":257}],190:[function(require,module,exports){
 (function (Buffer,process){
 var xtend = require('xtend')
 var AbstractIterator = require('./abstract-iterator')
@@ -13781,7 +13797,7 @@ AbstractLevelDOWN.prototype._checkValue = function (value) {
 module.exports = AbstractLevelDOWN
 
 }).call(this,{"isBuffer":require("../is-buffer/index.js")},require('_process'))
-},{"../is-buffer/index.js":222,"./abstract-chained-batch":188,"./abstract-iterator":189,"_process":255,"xtend":278}],191:[function(require,module,exports){
+},{"../is-buffer/index.js":223,"./abstract-chained-batch":188,"./abstract-iterator":189,"_process":257,"xtend":281}],191:[function(require,module,exports){
 exports.AbstractLevelDOWN = require('./abstract-leveldown')
 exports.AbstractIterator = require('./abstract-iterator')
 exports.AbstractChainedBatch = require('./abstract-chained-batch')
@@ -14296,7 +14312,7 @@ var objectKeys = Object.keys || function (obj) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"object-assign":254,"util/":195}],193:[function(require,module,exports){
+},{"object-assign":256,"util/":195}],193:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -14918,7 +14934,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":194,"_process":255,"inherits":193}],196:[function(require,module,exports){
+},{"./support/isBuffer":194,"_process":257,"inherits":193}],196:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -15074,6 +15090,8 @@ function fromByteArray (uint8) {
 },{}],197:[function(require,module,exports){
 
 },{}],198:[function(require,module,exports){
+arguments[4][197][0].apply(exports,arguments)
+},{"dup":197}],199:[function(require,module,exports){
 (function (Buffer){
 /*!
  * The buffer module from node.js, for the browser.
@@ -16854,19 +16872,572 @@ function numberIsNaN (obj) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"base64-js":196,"buffer":198,"ieee754":214}],199:[function(require,module,exports){
+},{"base64-js":196,"buffer":199,"ieee754":215}],200:[function(require,module,exports){
+var __self__ = (function (root) {
+function F() {
+this.fetch = false;
+this.DOMException = root.DOMException
+}
+F.prototype = root;
+return new F();
+})(typeof self !== 'undefined' ? self : this);
+(function(self) {
+
+var irrelevant = (function (exports) {
+  var support = {
+    searchParams: 'URLSearchParams' in self,
+    iterable: 'Symbol' in self && 'iterator' in Symbol,
+    blob:
+      'FileReader' in self &&
+      'Blob' in self &&
+      (function() {
+        try {
+          new Blob();
+          return true
+        } catch (e) {
+          return false
+        }
+      })(),
+    formData: 'FormData' in self,
+    arrayBuffer: 'ArrayBuffer' in self
+  };
+
+  function isDataView(obj) {
+    return obj && DataView.prototype.isPrototypeOf(obj)
+  }
+
+  if (support.arrayBuffer) {
+    var viewClasses = [
+      '[object Int8Array]',
+      '[object Uint8Array]',
+      '[object Uint8ClampedArray]',
+      '[object Int16Array]',
+      '[object Uint16Array]',
+      '[object Int32Array]',
+      '[object Uint32Array]',
+      '[object Float32Array]',
+      '[object Float64Array]'
+    ];
+
+    var isArrayBufferView =
+      ArrayBuffer.isView ||
+      function(obj) {
+        return obj && viewClasses.indexOf(Object.prototype.toString.call(obj)) > -1
+      };
+  }
+
+  function normalizeName(name) {
+    if (typeof name !== 'string') {
+      name = String(name);
+    }
+    if (/[^a-z0-9\-#$%&'*+.^_`|~]/i.test(name)) {
+      throw new TypeError('Invalid character in header field name')
+    }
+    return name.toLowerCase()
+  }
+
+  function normalizeValue(value) {
+    if (typeof value !== 'string') {
+      value = String(value);
+    }
+    return value
+  }
+
+  // Build a destructive iterator for the value list
+  function iteratorFor(items) {
+    var iterator = {
+      next: function() {
+        var value = items.shift();
+        return {done: value === undefined, value: value}
+      }
+    };
+
+    if (support.iterable) {
+      iterator[Symbol.iterator] = function() {
+        return iterator
+      };
+    }
+
+    return iterator
+  }
+
+  function Headers(headers) {
+    this.map = {};
+
+    if (headers instanceof Headers) {
+      headers.forEach(function(value, name) {
+        this.append(name, value);
+      }, this);
+    } else if (Array.isArray(headers)) {
+      headers.forEach(function(header) {
+        this.append(header[0], header[1]);
+      }, this);
+    } else if (headers) {
+      Object.getOwnPropertyNames(headers).forEach(function(name) {
+        this.append(name, headers[name]);
+      }, this);
+    }
+  }
+
+  Headers.prototype.append = function(name, value) {
+    name = normalizeName(name);
+    value = normalizeValue(value);
+    var oldValue = this.map[name];
+    this.map[name] = oldValue ? oldValue + ', ' + value : value;
+  };
+
+  Headers.prototype['delete'] = function(name) {
+    delete this.map[normalizeName(name)];
+  };
+
+  Headers.prototype.get = function(name) {
+    name = normalizeName(name);
+    return this.has(name) ? this.map[name] : null
+  };
+
+  Headers.prototype.has = function(name) {
+    return this.map.hasOwnProperty(normalizeName(name))
+  };
+
+  Headers.prototype.set = function(name, value) {
+    this.map[normalizeName(name)] = normalizeValue(value);
+  };
+
+  Headers.prototype.forEach = function(callback, thisArg) {
+    for (var name in this.map) {
+      if (this.map.hasOwnProperty(name)) {
+        callback.call(thisArg, this.map[name], name, this);
+      }
+    }
+  };
+
+  Headers.prototype.keys = function() {
+    var items = [];
+    this.forEach(function(value, name) {
+      items.push(name);
+    });
+    return iteratorFor(items)
+  };
+
+  Headers.prototype.values = function() {
+    var items = [];
+    this.forEach(function(value) {
+      items.push(value);
+    });
+    return iteratorFor(items)
+  };
+
+  Headers.prototype.entries = function() {
+    var items = [];
+    this.forEach(function(value, name) {
+      items.push([name, value]);
+    });
+    return iteratorFor(items)
+  };
+
+  if (support.iterable) {
+    Headers.prototype[Symbol.iterator] = Headers.prototype.entries;
+  }
+
+  function consumed(body) {
+    if (body.bodyUsed) {
+      return Promise.reject(new TypeError('Already read'))
+    }
+    body.bodyUsed = true;
+  }
+
+  function fileReaderReady(reader) {
+    return new Promise(function(resolve, reject) {
+      reader.onload = function() {
+        resolve(reader.result);
+      };
+      reader.onerror = function() {
+        reject(reader.error);
+      };
+    })
+  }
+
+  function readBlobAsArrayBuffer(blob) {
+    var reader = new FileReader();
+    var promise = fileReaderReady(reader);
+    reader.readAsArrayBuffer(blob);
+    return promise
+  }
+
+  function readBlobAsText(blob) {
+    var reader = new FileReader();
+    var promise = fileReaderReady(reader);
+    reader.readAsText(blob);
+    return promise
+  }
+
+  function readArrayBufferAsText(buf) {
+    var view = new Uint8Array(buf);
+    var chars = new Array(view.length);
+
+    for (var i = 0; i < view.length; i++) {
+      chars[i] = String.fromCharCode(view[i]);
+    }
+    return chars.join('')
+  }
+
+  function bufferClone(buf) {
+    if (buf.slice) {
+      return buf.slice(0)
+    } else {
+      var view = new Uint8Array(buf.byteLength);
+      view.set(new Uint8Array(buf));
+      return view.buffer
+    }
+  }
+
+  function Body() {
+    this.bodyUsed = false;
+
+    this._initBody = function(body) {
+      this._bodyInit = body;
+      if (!body) {
+        this._bodyText = '';
+      } else if (typeof body === 'string') {
+        this._bodyText = body;
+      } else if (support.blob && Blob.prototype.isPrototypeOf(body)) {
+        this._bodyBlob = body;
+      } else if (support.formData && FormData.prototype.isPrototypeOf(body)) {
+        this._bodyFormData = body;
+      } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
+        this._bodyText = body.toString();
+      } else if (support.arrayBuffer && support.blob && isDataView(body)) {
+        this._bodyArrayBuffer = bufferClone(body.buffer);
+        // IE 10-11 can't handle a DataView body.
+        this._bodyInit = new Blob([this._bodyArrayBuffer]);
+      } else if (support.arrayBuffer && (ArrayBuffer.prototype.isPrototypeOf(body) || isArrayBufferView(body))) {
+        this._bodyArrayBuffer = bufferClone(body);
+      } else {
+        this._bodyText = body = Object.prototype.toString.call(body);
+      }
+
+      if (!this.headers.get('content-type')) {
+        if (typeof body === 'string') {
+          this.headers.set('content-type', 'text/plain;charset=UTF-8');
+        } else if (this._bodyBlob && this._bodyBlob.type) {
+          this.headers.set('content-type', this._bodyBlob.type);
+        } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
+          this.headers.set('content-type', 'application/x-www-form-urlencoded;charset=UTF-8');
+        }
+      }
+    };
+
+    if (support.blob) {
+      this.blob = function() {
+        var rejected = consumed(this);
+        if (rejected) {
+          return rejected
+        }
+
+        if (this._bodyBlob) {
+          return Promise.resolve(this._bodyBlob)
+        } else if (this._bodyArrayBuffer) {
+          return Promise.resolve(new Blob([this._bodyArrayBuffer]))
+        } else if (this._bodyFormData) {
+          throw new Error('could not read FormData body as blob')
+        } else {
+          return Promise.resolve(new Blob([this._bodyText]))
+        }
+      };
+
+      this.arrayBuffer = function() {
+        if (this._bodyArrayBuffer) {
+          return consumed(this) || Promise.resolve(this._bodyArrayBuffer)
+        } else {
+          return this.blob().then(readBlobAsArrayBuffer)
+        }
+      };
+    }
+
+    this.text = function() {
+      var rejected = consumed(this);
+      if (rejected) {
+        return rejected
+      }
+
+      if (this._bodyBlob) {
+        return readBlobAsText(this._bodyBlob)
+      } else if (this._bodyArrayBuffer) {
+        return Promise.resolve(readArrayBufferAsText(this._bodyArrayBuffer))
+      } else if (this._bodyFormData) {
+        throw new Error('could not read FormData body as text')
+      } else {
+        return Promise.resolve(this._bodyText)
+      }
+    };
+
+    if (support.formData) {
+      this.formData = function() {
+        return this.text().then(decode)
+      };
+    }
+
+    this.json = function() {
+      return this.text().then(JSON.parse)
+    };
+
+    return this
+  }
+
+  // HTTP methods whose capitalization should be normalized
+  var methods = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'];
+
+  function normalizeMethod(method) {
+    var upcased = method.toUpperCase();
+    return methods.indexOf(upcased) > -1 ? upcased : method
+  }
+
+  function Request(input, options) {
+    options = options || {};
+    var body = options.body;
+
+    if (input instanceof Request) {
+      if (input.bodyUsed) {
+        throw new TypeError('Already read')
+      }
+      this.url = input.url;
+      this.credentials = input.credentials;
+      if (!options.headers) {
+        this.headers = new Headers(input.headers);
+      }
+      this.method = input.method;
+      this.mode = input.mode;
+      this.signal = input.signal;
+      if (!body && input._bodyInit != null) {
+        body = input._bodyInit;
+        input.bodyUsed = true;
+      }
+    } else {
+      this.url = String(input);
+    }
+
+    this.credentials = options.credentials || this.credentials || 'same-origin';
+    if (options.headers || !this.headers) {
+      this.headers = new Headers(options.headers);
+    }
+    this.method = normalizeMethod(options.method || this.method || 'GET');
+    this.mode = options.mode || this.mode || null;
+    this.signal = options.signal || this.signal;
+    this.referrer = null;
+
+    if ((this.method === 'GET' || this.method === 'HEAD') && body) {
+      throw new TypeError('Body not allowed for GET or HEAD requests')
+    }
+    this._initBody(body);
+  }
+
+  Request.prototype.clone = function() {
+    return new Request(this, {body: this._bodyInit})
+  };
+
+  function decode(body) {
+    var form = new FormData();
+    body
+      .trim()
+      .split('&')
+      .forEach(function(bytes) {
+        if (bytes) {
+          var split = bytes.split('=');
+          var name = split.shift().replace(/\+/g, ' ');
+          var value = split.join('=').replace(/\+/g, ' ');
+          form.append(decodeURIComponent(name), decodeURIComponent(value));
+        }
+      });
+    return form
+  }
+
+  function parseHeaders(rawHeaders) {
+    var headers = new Headers();
+    // Replace instances of \r\n and \n followed by at least one space or horizontal tab with a space
+    // https://tools.ietf.org/html/rfc7230#section-3.2
+    var preProcessedHeaders = rawHeaders.replace(/\r?\n[\t ]+/g, ' ');
+    preProcessedHeaders.split(/\r?\n/).forEach(function(line) {
+      var parts = line.split(':');
+      var key = parts.shift().trim();
+      if (key) {
+        var value = parts.join(':').trim();
+        headers.append(key, value);
+      }
+    });
+    return headers
+  }
+
+  Body.call(Request.prototype);
+
+  function Response(bodyInit, options) {
+    if (!options) {
+      options = {};
+    }
+
+    this.type = 'default';
+    this.status = options.status === undefined ? 200 : options.status;
+    this.ok = this.status >= 200 && this.status < 300;
+    this.statusText = 'statusText' in options ? options.statusText : 'OK';
+    this.headers = new Headers(options.headers);
+    this.url = options.url || '';
+    this._initBody(bodyInit);
+  }
+
+  Body.call(Response.prototype);
+
+  Response.prototype.clone = function() {
+    return new Response(this._bodyInit, {
+      status: this.status,
+      statusText: this.statusText,
+      headers: new Headers(this.headers),
+      url: this.url
+    })
+  };
+
+  Response.error = function() {
+    var response = new Response(null, {status: 0, statusText: ''});
+    response.type = 'error';
+    return response
+  };
+
+  var redirectStatuses = [301, 302, 303, 307, 308];
+
+  Response.redirect = function(url, status) {
+    if (redirectStatuses.indexOf(status) === -1) {
+      throw new RangeError('Invalid status code')
+    }
+
+    return new Response(null, {status: status, headers: {location: url}})
+  };
+
+  exports.DOMException = self.DOMException;
+  try {
+    new exports.DOMException();
+  } catch (err) {
+    exports.DOMException = function(message, name) {
+      this.message = message;
+      this.name = name;
+      var error = Error(message);
+      this.stack = error.stack;
+    };
+    exports.DOMException.prototype = Object.create(Error.prototype);
+    exports.DOMException.prototype.constructor = exports.DOMException;
+  }
+
+  function fetch(input, init) {
+    return new Promise(function(resolve, reject) {
+      var request = new Request(input, init);
+
+      if (request.signal && request.signal.aborted) {
+        return reject(new exports.DOMException('Aborted', 'AbortError'))
+      }
+
+      var xhr = new XMLHttpRequest();
+
+      function abortXhr() {
+        xhr.abort();
+      }
+
+      xhr.onload = function() {
+        var options = {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers: parseHeaders(xhr.getAllResponseHeaders() || '')
+        };
+        options.url = 'responseURL' in xhr ? xhr.responseURL : options.headers.get('X-Request-URL');
+        var body = 'response' in xhr ? xhr.response : xhr.responseText;
+        resolve(new Response(body, options));
+      };
+
+      xhr.onerror = function() {
+        reject(new TypeError('Network request failed'));
+      };
+
+      xhr.ontimeout = function() {
+        reject(new TypeError('Network request failed'));
+      };
+
+      xhr.onabort = function() {
+        reject(new exports.DOMException('Aborted', 'AbortError'));
+      };
+
+      xhr.open(request.method, request.url, true);
+
+      if (request.credentials === 'include') {
+        xhr.withCredentials = true;
+      } else if (request.credentials === 'omit') {
+        xhr.withCredentials = false;
+      }
+
+      if ('responseType' in xhr && support.blob) {
+        xhr.responseType = 'blob';
+      }
+
+      request.headers.forEach(function(value, name) {
+        xhr.setRequestHeader(name, value);
+      });
+
+      if (request.signal) {
+        request.signal.addEventListener('abort', abortXhr);
+
+        xhr.onreadystatechange = function() {
+          // DONE (success or failure)
+          if (xhr.readyState === 4) {
+            request.signal.removeEventListener('abort', abortXhr);
+          }
+        };
+      }
+
+      xhr.send(typeof request._bodyInit === 'undefined' ? null : request._bodyInit);
+    })
+  }
+
+  fetch.polyfill = true;
+
+  if (!self.fetch) {
+    self.fetch = fetch;
+    self.Headers = Headers;
+    self.Request = Request;
+    self.Response = Response;
+  }
+
+  exports.Headers = Headers;
+  exports.Request = Request;
+  exports.Response = Response;
+  exports.fetch = fetch;
+
+  return exports;
+
+}({}));
+})(__self__);
+delete __self__.fetch.polyfill
+exports = __self__.fetch // To enable: import fetch from 'cross-fetch'
+exports.default = __self__.fetch // For TypeScript consumers without esModuleInterop.
+exports.fetch = __self__.fetch // To enable: import {fetch} from 'cross-fetch'
+exports.Headers = __self__.Headers
+exports.Request = __self__.Request
+exports.Response = __self__.Response
+module.exports = exports
+
+},{}],201:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const curtiz_utils_1 = require("curtiz-utils");
+const jmdict_furigana_node_1 = require("jmdict-furigana-node");
+const matrix_1 = require("./matrix");
+var QuizKind;
+(function (QuizKind) {
+    QuizKind["Cloze"] = "cloze";
+    QuizKind["Card"] = "card";
+    QuizKind["Match"] = "match";
+})(QuizKind = exports.QuizKind || (exports.QuizKind = {}));
 function addIdToCloze(cloze) {
-    cloze.uniqueId = JSON.stringify({ contexts: cloze.contexts, clozes: cloze.clozes });
+    cloze.uniqueId = JSON.stringify({ contexts: cloze.contexts, clozes: cloze.clozes, prompts: cloze.prompts });
     return cloze;
 }
 function emptyGraph() { return { edges: new Map(), nodes: new Map(), raws: new Map() }; }
 function addNode(graph, node, id) {
-    if (!graph.nodes.has(id)) {
-        graph.nodes.set(id, node);
-    }
+    graph.nodes.set(id, Object.assign({}, (graph.nodes.get(id) || {}), node));
 }
 function addEdge(graph, parent, parentId, child, childId) {
     addNode(graph, parent, parentId);
@@ -16879,6 +17450,12 @@ function addEdge(graph, parent, parentId, child, childId) {
         graph.edges.set(parentId, new Set([childId]));
     }
 }
+function addEdgeQuiz(graph, parent, child) {
+    if (!parent || !child) {
+        return;
+    }
+    addEdge(graph, parent, parent.uniqueId, child, child.uniqueId);
+}
 function addNodeWithRaw(graph, raw, node) {
     addNode(graph, node, node.uniqueId);
     let nodes = graph.raws.get(raw);
@@ -16887,6 +17464,15 @@ function addNodeWithRaw(graph, raw, node) {
     }
     else {
         graph.raws.set(raw, new Set([node.uniqueId]));
+    }
+}
+function addRaw(graph, raw, nodeId) {
+    let nodes = graph.raws.get(raw);
+    if (nodes) {
+        nodes.add(nodeId);
+    }
+    else {
+        graph.raws.set(raw, new Set([nodeId]));
     }
 }
 function _separateAtSeparateds(s, n = 0) {
@@ -16908,134 +17494,261 @@ function _separateAtSeparateds(s, n = 0) {
     return { atSeparatedValues, adverbs };
 }
 exports._separateAtSeparateds = _separateAtSeparateds;
-function makeCard(prompt, responses) {
-    return { prompt, responses, uniqueId: JSON.stringify({ prompt, responses }), kind: 'card' };
+function makeCard(prompt, responses, passive, inverted) {
+    return {
+        prompt,
+        responses,
+        uniqueId: JSON.stringify({ prompt, responses, passive }),
+        kind: QuizKind.Card,
+        passive,
+        inverted
+    };
 }
 exports.makeCard = makeCard;
+function extractShortTranslation(adverbs) {
+    let translation = undefined;
+    for (const key of Object.keys(adverbs)) {
+        if (key.startsWith('@t-')) {
+            translation = translation || {};
+            translation[key.slice(3)] = adverbs[key];
+        }
+    }
+    return translation;
+}
+const RESPONSE_SEP = '・';
+function promptResponsesToCards(prompt, responses) {
+    const passiveconstant = true;
+    const invertedconstant = true;
+    const PASSIVE = makeCard(prompt, responses, passiveconstant, !invertedconstant);
+    let SEEPROMPT;
+    let SEERESPONSE;
+    if ((responses.length > 1 || responses[0] !== prompt)) {
+        SEEPROMPT = makeCard(prompt, responses, !passiveconstant, !invertedconstant);
+        SEERESPONSE = makeCard(responses.join(RESPONSE_SEP), [prompt], !passiveconstant, invertedconstant);
+    }
+    return { PASSIVE, SEEPROMPT, SEERESPONSE };
+}
+function makeGraphMatrix() {
+    // 9x9 linking sentence flashcards, sub-sentence vocab flashcards, and vocab-cloze-deleted quizzes
+    const northwest = '011 101 000';
+    const north = '000 000 000';
+    const northeast = '111 111 000';
+    const west = '111 111 001';
+    const middle = '011 101 000';
+    const east = '111 111 001';
+    const southwest = '111 111 001';
+    const south = '000 111 001';
+    const southeast = '011 101 000';
+    const m = (m) => matrix_1.stringToMatrix(m);
+    const SENTENCEMAT = matrix_1.vstack(matrix_1.hstack(...[northwest, north, northeast].map(m)), matrix_1.hstack(...[west, middle, east].map(m)), matrix_1.hstack(...[southwest, south, southeast].map(m)));
+    // the 10x10 matrix linking the above 9 with a matching (translation) quiz
+    const nineZeros = '0'.repeat(9);
+    const vertCol = '110110110'.split('');
+    const firstNineRows = vertCol.map(x => nineZeros + x);
+    const finalRow = '1110001110';
+    const matrixS = firstNineRows.join(' ') + ' ' + finalRow;
+    const MATCHMAT = matrix_1.stringToMatrix(matrixS);
+    if (MATCHMAT.length !== 10 || MATCHMAT.some(row => row.length !== 10)) {
+        throw new Error('wat');
+    }
+    return { SENTENCEMAT, MATCHMAT };
+}
+const { SENTENCEMAT, MATCHMAT } = makeGraphMatrix();
+function link(graph, matrix, nodes) {
+    if (nodes.length !== matrix.length || matrix.some(row => row.length !== nodes.length)) {
+        throw new Error('bad graph matrix size');
+    }
+    for (let parentidx = 0; parentidx < nodes.length; parentidx++) {
+        for (let childidx = 0; childidx < nodes.length; childidx++) {
+            if (matrix[childidx][parentidx]) {
+                addEdgeQuiz(graph, nodes[parentidx], nodes[childidx]);
+            }
+        }
+    }
+}
 function updateGraphWithBlock(graph, block) {
     const atRe = /^#+\s+@\s+/;
     const match = block[0].match(atRe);
     if (match) {
         const translationRe = /^-\s+@translation\s+/;
+        const furiganaRe = /^-\s+@furigana\s+/;
         const fillRe = /^-\s+@fill\s+/;
         const flashRe = /^-\s+@\s+/;
-        const { atSeparatedValues: items, adverbs } = _separateAtSeparateds(block[0], match[0].length);
-        const [prompt, ...responses] = items;
-        let card = makeCard(prompt, responses);
-        addNodeWithRaw(graph, block[0], card);
-        let allFills = [];
-        let allFlashes = [];
-        let allFlashfillsPromptKanji = [];
-        let allFlashfillsPromptReading = [];
-        let translation = undefined;
-        for (const key of Object.keys(adverbs)) {
-            if (key.startsWith('@t-')) {
-                translation = translation || {};
-                translation[key.slice(3)] = adverbs[key];
-            }
+        const unknownRe = /^\s*-\s+@/;
+        const headerFields = _separateAtSeparateds(block[0], match[0].length);
+        const [prompt, ...responses] = headerFields.atSeparatedValues;
+        if (!prompt) {
+            throw new Error('no prompt? ' + JSON.stringify(headerFields));
         }
-        for (let line of block.slice(1)) {
-            let match;
-            if (match = line.match(translationRe)) {
-                //
-                // Extract translation
-                //
-                const { atSeparatedValues: _, adverbs: translationAdverbs } = _separateAtSeparateds(line, match[0].length);
-                translation = translation || {};
-                for (let [k, v] of Object.entries(translationAdverbs)) {
-                    translation[k.replace(/^@/, '')] = v;
-                }
-                card.translation = translation;
-            }
-            else if (match = line.match(fillRe)) {
-                //
-                // Extract fill in the blank: either particle or conjugated phrase
-                //
-                const { atSeparatedValues: fills, adverbs: fillAdverbs } = _separateAtSeparateds(line, match[0].length);
-                const cloze = parseCloze(prompt, fills[0]);
-                // add other valid entries
-                cloze.clozes[0].push(...fills.slice(1));
-                const node = addIdToCloze(cloze);
-                allFills.push(node);
-                addNodeWithRaw(graph, block[0] + '\n' + line, node);
-            }
-            else if (match = line.match(flashRe)) {
-                //
-                // Extract flashcard
-                //
-                const { atSeparatedValues: items2, adverbs: flashAdverbs } = _separateAtSeparateds(line, match[0].length);
-                const [prompt2, ...responses2] = items2;
-                let flash = makeCard(prompt2, responses2);
-                if ('@pos' in flashAdverbs) {
-                    flash.pos = flashAdverbs['@pos'].split('-');
-                }
-                // Is the header card is repeated in this bullet? Skip it. A part of speech might be present though
-                if (flash.prompt === prompt && responses2.length === responses.length &&
-                    responses2.join('') === responses.join('')) {
-                    if (flash.pos && !card.pos) {
-                        card.pos = flash.pos;
-                    }
-                    continue;
-                }
-                allFlashes.push(flash);
-                addNodeWithRaw(graph, block[0] + '\n' + line, flash);
-                // Can I make fill-in-the-blank quizzes out of this flashcard?
-                if ('@omit' in flashAdverbs || prompt.includes(prompt2)) {
-                    const blank = flashAdverbs['@omit'] || prompt2;
-                    { // first, make the blank's prompt be prompt2 and the acceptable answers be either prompt2 or responses2
-                        let cloze = parseCloze(prompt, blank);
-                        cloze.clozes = [responses2.concat(prompt2)];
-                        cloze.prompts = [prompt2];
-                        const node = addIdToCloze(cloze);
-                        allFlashfillsPromptReading.push(node);
-                        addNodeWithRaw(graph, block[0] + '\n' + line, node);
-                    }
-                    { // next, make the blank prompt be responses2 and the acceptable answer only prompt2
-                        let cloze = parseCloze(prompt, blank);
-                        cloze.clozes = [[prompt2]];
-                        cloze.prompts = [responses2.join('||')];
-                        const node = addIdToCloze(cloze);
-                        allFlashfillsPromptKanji.push(node);
-                        addNodeWithRaw(graph, block[0] + '\n' + line, node);
-                    }
-                }
-            }
-            else if (line.match(/^\s*-\s+@/)) {
-                // Sub-at-bullets and unrecognized at-bullets
-            }
-            else {
-                // stop looking for @fill/@flash after initial @-bulleted list
-                break;
-            }
+        if (responses.length === 0) {
+            responses.push(prompt);
         }
-        // update translation
+        const { PASSIVE, SEEPROMPT, SEERESPONSE } = promptResponsesToCards(prompt, responses);
+        const allCards = [PASSIVE, SEEPROMPT, SEERESPONSE];
+        const cards = allCards.filter(x => !!x);
+        cards.forEach(card => addNodeWithRaw(graph, block[0], card));
+        const acceptableContiguousRegexps = [translationRe, furiganaRe, fillRe, flashRe, unknownRe];
+        const bullets = curtiz_utils_1.takeWhile(block.slice(1), line => acceptableContiguousRegexps.some(re => re.test(line)));
+        const translation = extractShortTranslation(headerFields.adverbs) || bullets.filter(line => translationRe.test(line)).map(line => {
+            const match = line.match(translationRe);
+            if (!match) {
+                throw new Error('typescript pacification TRANSLATION: ' + line);
+            }
+            const { adverbs } = _separateAtSeparateds(line, match[0].length);
+            const translation = {};
+            for (let [k, v] of Object.entries(adverbs)) {
+                translation[k.replace(/^@/, '')] = v;
+            }
+            return translation;
+        })[0];
+        const furigana = bullets.filter(line => furiganaRe.test(line)).map(line => {
+            const match = line.match(furiganaRe);
+            if (!match) {
+                throw new Error('typescript pacification FURIGANA: ' + line);
+            }
+            return jmdict_furigana_node_1.stringToFurigana(line.slice(match[0].length));
+        })[0];
+        if (furigana) {
+            cards.forEach(node => node.lede = furigana);
+        }
         if (translation) {
-            card.translation = translation;
-            for (const list of [allFills, allFlashfillsPromptKanji, allFlashfillsPromptReading]) {
-                for (const ent of list) {
-                    ent.translation = translation;
+            cards.forEach(node => node.translation = translation);
+        }
+        // might not get the opportunity to link these later
+        link(graph, SENTENCEMAT, allCards.concat(Array(6).fill(undefined)));
+        const fills = bullets.filter(line => fillRe.test(line)).map(line => {
+            const match = line.match(fillRe);
+            if (!match) {
+                throw new Error('typescript pacification FILL: ' + line);
+            }
+            const fill = _separateAtSeparateds(line, match[0].length);
+            const cloze = parseCloze(prompt, fill.atSeparatedValues[0]);
+            // add other valid entries
+            cloze.clozes[0].push(...fill.atSeparatedValues.slice(1));
+            // complete the graph node
+            const node = addIdToCloze(cloze);
+            addNodeWithRaw(graph, block[0] + '\n' + line, node);
+            for (const card of cards) {
+                addEdgeQuiz(graph, card, node);
+                addEdgeQuiz(graph, node, card); // flipped
+            }
+            if (furigana) {
+                node.lede = furigana;
+            }
+            if (translation) {
+                node.translation = translation;
+            }
+            return node;
+        });
+        const flashs = bullets.filter(line => flashRe.test(line)).map(line => {
+            const match = line.match(flashRe);
+            if (!match) {
+                throw new Error('typescript pacification FLASH: ' + line);
+            }
+            const flash = _separateAtSeparateds(line, match[0].length);
+            const [prompt2, ...resp2] = flash.atSeparatedValues;
+            const { PASSIVE: subPassive, SEEPROMPT: subPrompt, SEERESPONSE: subResponse } = promptResponsesToCards(prompt2, resp2);
+            const allFlashs = [subPassive, subPrompt, subResponse];
+            const topFlashs = allFlashs.filter(x => !!x);
+            // if this flashcard has a part of speech or furigana
+            if ('@furigana' in flash.adverbs) {
+                const lede = jmdict_furigana_node_1.stringToFurigana(flash.adverbs['@furigana']);
+                topFlashs.forEach(card => card.lede = lede);
+            }
+            if ('@pos' in flash.adverbs) {
+                topFlashs.forEach(card => card.pos = flash.adverbs['@pos'].split('-'));
+            }
+            // Is the header card is repeated in this bullet? Skip it.
+            if (prompt2 === prompt && resp2.length === responses.length && resp2.join('') === responses.join('')) {
+                if (!cards[0].pos && topFlashs[0].pos) {
+                    cards.forEach(card => {
+                        card.pos = topFlashs[0].pos;
+                        addNodeWithRaw(graph, block[0], card); // merge pos
+                    });
+                }
+                return [];
+            }
+            // if local translation available
+            const thisTranslation = extractShortTranslation(flash.adverbs);
+            if (thisTranslation) {
+                topFlashs.forEach(card => card.translation = thisTranslation);
+            }
+            // Now enroll these top-level-equivalent flashcards into the graph
+            topFlashs.forEach(card => addNodeWithRaw(graph, block[0] + '\n' + line, card));
+            // Can I make fill-in-the-blank quizzes out of this flashcard?
+            let clozeSeeNothing;
+            let clozeSeePrompt;
+            let clozeSeeResponse;
+            if ('@omit' in flash.adverbs || prompt.includes(prompt2)) {
+                const blank = flash.adverbs['@omit'] || prompt2;
+                if (subPassive && subPrompt && subResponse) {
+                    // if I can make A', B', C'
+                    {
+                        const node = parseCloze(prompt, blank);
+                        // no prompts, can answer with either prompt or response
+                        node.clozes[0] = resp2.concat(prompt2);
+                        clozeSeeNothing = addIdToCloze(node);
+                    }
+                    {
+                        let node = parseCloze(prompt, blank);
+                        // show cloze hint as the prompt
+                        node.prompts = [prompt2];
+                        // require answer to be responses (or prompt since IME)
+                        node.clozes[0] = resp2.concat(prompt2);
+                        clozeSeePrompt = addIdToCloze(node);
+                    }
+                    {
+                        let node = parseCloze(prompt, blank);
+                        node.prompts = [resp2.join(RESPONSE_SEP)];
+                        node.clozes[0] = [prompt2];
+                        clozeSeeResponse = addIdToCloze(node);
+                    }
+                }
+                else {
+                    // Can only make A'
+                    let node = parseCloze(prompt, blank);
+                    // no prompts, can answer with either prompt or response
+                    node.clozes[0] = resp2.concat(prompt2);
+                    clozeSeeNothing = addIdToCloze(node);
                 }
             }
-        }
-        // All nodes should have been added, along with raws. Now build edges.
-        //
-        // Studying the card implies everything else was studied too: flashes, fills, and flash-fills
-        for (const children of [allFlashes, allFills, allFlashfillsPromptKanji, allFlashfillsPromptReading]) {
-            for (const child of children) {
-                addEdge(graph, card, card.uniqueId, child, child.uniqueId);
+            const allClozes = [clozeSeeNothing, clozeSeePrompt, clozeSeeResponse];
+            allClozes.forEach(cloze => {
+                if (cloze) {
+                    addNodeWithRaw(graph, block[0] + '\n' + line, cloze);
+                    if (translation) {
+                        cloze.translation = translation;
+                    }
+                    if (furigana) {
+                        cloze.lede = furigana;
+                    }
+                }
+            });
+            link(graph, SENTENCEMAT, cards.concat(topFlashs).concat(allClozes));
+            return [allFlashs, allClozes];
+        });
+        // all sub-bullets parsed. Now make matching
+        {
+            const pairs = [];
+            for (const [[passive, ..._], __] of flashs.filter(v => v.length)) {
+                if (passive && passive.kind === QuizKind.Card && passive.lede && passive.translation) {
+                    pairs.push({ text: passive.lede, translation: passive.translation });
+                }
             }
-        }
-        // Studying the flash or fill-flashes implies studying the other.
-        for (const [flash, clozeKanji, clozeKana] of curtiz_utils_1.zip(allFlashes, allFlashfillsPromptKanji, allFlashfillsPromptReading)) {
-            addEdge(graph, flash, flash.uniqueId, clozeKanji, clozeKanji.uniqueId);
-            addEdge(graph, flash, flash.uniqueId, clozeKana, clozeKana.uniqueId);
-            addEdge(graph, clozeKanji, clozeKanji.uniqueId, flash, flash.uniqueId);
-            addEdge(graph, clozeKana, clozeKana.uniqueId, flash, flash.uniqueId);
-        }
-        // Studying fills or fill-flashes implies studying the card
-        for (const fills of [allFills, allFlashfillsPromptKanji, allFlashfillsPromptReading]) {
-            for (const fill of fills) {
-                addEdge(graph, fill, fill.uniqueId, card, card.uniqueId);
+            if (pairs.length) {
+                const kind = QuizKind.Match;
+                const translation = PASSIVE.translation;
+                const lede = PASSIVE.lede;
+                const uniqueId = JSON.stringify({ lede, pairs });
+                const match = { uniqueId, kind, translation, lede, pairs };
+                addNodeWithRaw(graph, block[0], match);
+                // reviewing any of the top cards (promt<->resp) is a passive review for this match card
+                // reviewing the match is passive review for the top-level passive/show-prompt
+                //
+                for (const [[a, b, c], [ap, bp, cp]] of flashs) {
+                    const ten = [cards[0], cards[1], cards[2], a, b, c, ap, bp, cp, match];
+                    link(graph, MATCHMAT, ten);
+                }
             }
         }
     }
@@ -17086,7 +17799,7 @@ function parseCloze(haystack, needleMaybeContext) {
         if (fullRe.exec(haystack)) {
             throw new Error('Insufficient cloze context');
         }
-        return { contexts: [left, null, right], clozes: [[cloze]], kind: 'cloze' };
+        return { contexts: [left, null, right], clozes: [[cloze]], kind: QuizKind.Cloze };
     }
     let cloze = needleMaybeContext;
     let clozeRe = new RegExp(cloze, 'g');
@@ -17097,7 +17810,7 @@ function parseCloze(haystack, needleMaybeContext) {
         if (clozeRe.exec(haystack)) {
             throw new Error('Cloze context required');
         }
-        return { contexts: [left, null, right], clozes: [[cloze]], kind: 'cloze' };
+        return { contexts: [left, null, right], clozes: [[cloze]], kind: QuizKind.Cloze };
     }
     throw new Error('Cloze not found');
 }
@@ -17107,7 +17820,164 @@ if (module === require.main) {
     console.dir(graph, { depth: null });
 }
 
-},{"curtiz-utils":200}],200:[function(require,module,exports){
+},{"./matrix":202,"curtiz-utils":205,"jmdict-furigana-node":225}],202:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const curtiz_utils_1 = require("curtiz-utils");
+function stringToMatrix(s, opts = {}) {
+    const rowSplit = opts.rowSplit || /\s+/;
+    const colSplit = opts.colSplit || '';
+    const parser = opts.parser || parseInt;
+    const mat = s.split(rowSplit).map(line => line.split(colSplit).map(x => parser(x)));
+    const width = mat[0].length;
+    if (mat.some(row => row.length !== width)) {
+        throw new Error('ragged matrix');
+    }
+    return mat;
+}
+exports.stringToMatrix = stringToMatrix;
+function matrixCopy(m) {
+    const ret = [];
+    m.forEach(v => ret.push(v.slice()));
+    return ret;
+}
+exports.matrixCopy = matrixCopy;
+function matrixWidth(m) { return m[0].length; }
+exports.matrixWidth = matrixWidth;
+function matrixHeight(m) { return m.length; }
+exports.matrixHeight = matrixHeight;
+function hstack(...arrs) {
+    const height = matrixHeight(arrs[0]);
+    if (arrs.some(arr => matrixHeight(arr) !== height)) {
+        throw new Error('cannot hstack uneven heights');
+    }
+    return Array.from(Array(height), (_, rowid) => curtiz_utils_1.flatten(arrs.map(arr => arr[rowid])));
+}
+exports.hstack = hstack;
+function vstack(...arrs) {
+    const width = matrixWidth(arrs[0]);
+    if (arrs.some(arr => matrixWidth(arr) !== width)) {
+        throw new Error('cannot vstack uneven widths');
+    }
+    return curtiz_utils_1.flatten(arrs);
+}
+exports.vstack = vstack;
+if (module === require.main) {
+    const northwest = '011 101 000';
+    const north = '000 000 000';
+    const northeast = '111 111 000';
+    const west = '111 111 001';
+    const middle = '011 101 000';
+    const east = '111 111 001';
+    console.log(stringToMatrix(northwest));
+    console.log(hstack(...[northwest, north, northeast].map(m => stringToMatrix(m))));
+    console.log(vstack(hstack(...[northwest, north, northeast].map(m => stringToMatrix(m))), hstack(...[west, middle, east].map(m => stringToMatrix(m)))));
+}
+
+},{"curtiz-utils":205}],203:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var ebisujs = require('ebisu-js');
+function elapsedHours(prev, curr) {
+    // 36e5 milliseconds per hour
+    return ((curr ? curr.valueOf() : Date.now()) - prev.valueOf()) / 36e5;
+}
+function predict(ebisu, d) {
+    return ebisujs.predictRecall(ebisu.model, elapsedHours(ebisu.lastDate, d));
+}
+exports.predict = predict;
+function update(ebisu, result, d) {
+    ebisu.model = ebisujs.updateRecall(ebisu.model, result, elapsedHours(ebisu.lastDate, d));
+    ebisu.lastDate = d || new Date();
+    return ebisu;
+}
+exports.update = update;
+function passiveUpdate(ebisu, d) {
+    ebisu.lastDate = d || new Date();
+    return ebisu;
+}
+exports.passiveUpdate = passiveUpdate;
+function defaultEbisu(expectedHalflife = 1, betaAB = 3, d) {
+    return { model: [betaAB, betaAB, expectedHalflife], lastDate: d || new Date() };
+}
+exports.defaultEbisu = defaultEbisu;
+
+},{"ebisu-js":210}],204:[function(require,module,exports){
+"use strict";
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+    result["default"] = mod;
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const ebisu = __importStar(require("./ebisu"));
+exports.ebisu = ebisu;
+function addEmptyEbisus(graph) { return Object.assign({}, graph, { ebisus: new Map() }); }
+exports.addEmptyEbisus = addEmptyEbisus;
+exports.DEFAULT_EBISU_ALPHA_BETA = 2;
+exports.DEFAULT_EBISU_HALFLIFE_HOURS = 0.25;
+function whichToQuiz({ ebisus, nodes }, { date, details } = {}) {
+    let quiz;
+    let lowestPrecall = Infinity;
+    date = date || new Date();
+    if (details) {
+        details.out = [];
+    }
+    for (const [key, e] of ebisus) {
+        if (!nodes.has(key)) {
+            continue;
+        }
+        const precall = ebisu.predict(e, date);
+        if (precall < lowestPrecall) {
+            lowestPrecall = precall;
+            quiz = nodes.get(key);
+        }
+        if (details) {
+            details.out.push({ key, precall, model: e.model, date });
+        }
+    }
+    return quiz;
+}
+exports.whichToQuiz = whichToQuiz;
+function updateQuiz(result, key, { ebisus, edges }, { date, callback } = {}) {
+    date = date || new Date();
+    const updater = (key, passive = false) => {
+        let e = ebisus.get(key);
+        if (!e) {
+            return;
+        }
+        if (passive) {
+            ebisu.passiveUpdate(e, date);
+        }
+        else {
+            ebisu.update(e, result, date);
+        }
+        if (callback) {
+            callback(key, e);
+        }
+    };
+    updater(key);
+    const children = edges.get(key);
+    if (children) {
+        for (const child of children) {
+            updater(child, true);
+        }
+    }
+}
+exports.updateQuiz = updateQuiz;
+function learnQuiz(key, { ebisus }, { date, halflife, alphaBeta } = {}) {
+    if (!ebisus.has(key)) {
+        date = date || new Date();
+        halflife = halflife || exports.DEFAULT_EBISU_HALFLIFE_HOURS;
+        const e = ebisu.defaultEbisu(halflife, alphaBeta || exports.DEFAULT_EBISU_ALPHA_BETA, date);
+        ebisus.set(key, e);
+    }
+}
+exports.learnQuiz = learnQuiz;
+
+},{"./ebisu":203}],205:[function(require,module,exports){
 "use strict";
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
@@ -17364,8 +18234,23 @@ function mapRight(v, mapper) {
     return Array.from(Array(N), (_, i) => mapper(v[N - i - 1], N - i - 1, v));
 }
 exports.mapRight = mapRight;
+function groupBy(arr, f) {
+    const ret = new Map();
+    for (const x of arr) {
+        const y = f(x);
+        const hit = ret.get(y);
+        if (hit) {
+            hit.push(x);
+        }
+        else {
+            ret.set(y, [x]);
+        }
+    }
+    return ret;
+}
+exports.groupBy = groupBy;
 
-},{"./kana":201}],201:[function(require,module,exports){
+},{"./kana":206}],206:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 let hiragana = "ぁあぃいぅうぇえぉおかがきぎくぐけげこごさざしじすずせぜそぞただちぢっつづてでとどなに" +
@@ -17392,114 +18277,7 @@ approach had the least variability in runtime (200 to 800 microseconds), while a
 1500 microseconds.
 */
 
-},{}],202:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var ebisujs = require('ebisu-js');
-function elapsedHours(prev, curr) {
-    // 36e5 milliseconds per hour
-    return ((curr ? curr.valueOf() : Date.now()) - prev.valueOf()) / 36e5;
-}
-function predict(ebisu, d) {
-    return ebisujs.predictRecall(ebisu.model, elapsedHours(ebisu.lastDate, d));
-}
-exports.predict = predict;
-function update(ebisu, result, d) {
-    ebisu.model = ebisujs.updateRecall(ebisu.model, result, elapsedHours(ebisu.lastDate, d));
-    ebisu.lastDate = d || new Date();
-    return ebisu;
-}
-exports.update = update;
-function passiveUpdate(ebisu, d) {
-    ebisu.lastDate = d || new Date();
-    return ebisu;
-}
-exports.passiveUpdate = passiveUpdate;
-function defaultEbisu(expectedHalflife = 1, betaAB = 3, d) {
-    return { model: [betaAB, betaAB, expectedHalflife], lastDate: d || new Date() };
-}
-exports.defaultEbisu = defaultEbisu;
-
-},{"ebisu-js":209}],203:[function(require,module,exports){
-"use strict";
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-    result["default"] = mod;
-    return result;
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const ebisu = __importStar(require("./ebisu"));
-exports.ebisu = ebisu;
-function addEmptyEbisus(graph) { return Object.assign({}, graph, { ebisus: new Map() }); }
-exports.addEmptyEbisus = addEmptyEbisus;
-exports.DEFAULT_EBISU_ALPHA_BETA = 2;
-exports.DEFAULT_EBISU_HALFLIFE_HOURS = 0.25;
-function whichToQuiz({ ebisus, nodes }, { date, details } = {}) {
-    let quiz;
-    let lowestPrecall = Infinity;
-    date = date || new Date();
-    if (details) {
-        details.out = [];
-    }
-    for (const [key, e] of ebisus) {
-        if (!nodes.has(key)) {
-            continue;
-        }
-        const precall = ebisu.predict(e, date);
-        if (precall < lowestPrecall) {
-            lowestPrecall = precall;
-            quiz = nodes.get(key);
-        }
-        if (details) {
-            details.out.push({ key, precall, model: e.model, date });
-        }
-    }
-    return quiz;
-}
-exports.whichToQuiz = whichToQuiz;
-function updateQuiz(result, key, { ebisus, edges }, { date, callback } = {}) {
-    date = date || new Date();
-    const updater = (key, passive = false) => {
-        let e = ebisus.get(key);
-        if (!e) {
-            return;
-        }
-        if (passive) {
-            ebisu.passiveUpdate(e, date);
-        }
-        else {
-            ebisu.update(e, result, date);
-        }
-        if (callback) {
-            callback(key, e);
-        }
-    };
-    updater(key);
-    const children = edges.get(key);
-    if (children) {
-        for (const child of children) {
-            updater(child, true);
-        }
-    }
-}
-exports.updateQuiz = updateQuiz;
-function learnQuiz(key, { ebisus }, { date, halflife, alphaBeta } = {}) {
-    if (!ebisus.has(key)) {
-        date = date || new Date();
-        halflife = halflife || exports.DEFAULT_EBISU_HALFLIFE_HOURS;
-        const e = ebisu.defaultEbisu(halflife, alphaBeta || exports.DEFAULT_EBISU_ALPHA_BETA, date);
-        ebisus.set(key, e);
-    }
-}
-exports.learnQuiz = learnQuiz;
-
-},{"./ebisu":202}],204:[function(require,module,exports){
-arguments[4][200][0].apply(exports,arguments)
-},{"./kana":205,"dup":200}],205:[function(require,module,exports){
-arguments[4][201][0].apply(exports,arguments)
-},{"dup":201}],206:[function(require,module,exports){
+},{}],207:[function(require,module,exports){
 "use strict";
 var __assign = (this && this.__assign) || function () {
     __assign = Object.assign || function(t) {
@@ -17572,8 +18350,8 @@ var parse = __importStar(require("curtiz-parse-markdown"));
 var quiz = __importStar(require("curtiz-quiz-planner"));
 var level_js_1 = __importDefault(require("level-js"));
 var levelup_1 = __importDefault(require("levelup"));
-var EBISU_PREFIX = 'ebisus/';
-var EVENT_PREFIX = 'events/';
+exports.EBISU_PREFIX = 'ebisus/';
+exports.EVENT_PREFIX = 'events/';
 var PUT = 'put';
 function flat1(v) { return v.reduce(function (memo, curr) { return memo.concat(curr); }, []); }
 function rehydrateEbisu(nominalEbisu) {
@@ -17587,10 +18365,10 @@ exports.setup = setup;
 function loadEbisus(db) {
     var ebisus = new Map();
     return new Promise(function (resolve, reject) {
-        db.createReadStream({ gt: EBISU_PREFIX, lt: EBISU_PREFIX + '\xff', valueAsBuffer: false, keyAsBuffer: false })
+        db.createReadStream({ gt: exports.EBISU_PREFIX, lt: exports.EBISU_PREFIX + '\xff', valueAsBuffer: false, keyAsBuffer: false })
             .on('data', function (_a) {
             var key = _a.key, value = _a.value;
-            return ebisus.set(key.slice(EBISU_PREFIX.length), rehydrateEbisu(value));
+            return ebisus.set(key.slice(exports.EBISU_PREFIX.length), rehydrateEbisu(value));
         })
             .on('close', function () { return resolve({ ebisus: ebisus }); })
             .on('error', function (err) { return reject(err); });
@@ -17611,26 +18389,26 @@ function initialize(db, md) {
     });
 }
 exports.initialize = initialize;
-function updateQuiz(db, result, key, args, _a) {
-    var date = (_a === void 0 ? {} : _a).date;
-    date = date || new Date();
+function updateQuiz(db, result, key, args, opts) {
+    if (opts === void 0) { opts = {}; }
+    var date = opts.date || new Date();
     var batch = [];
     function callback(key, ebisu) {
-        batch.push({ type: PUT, key: EBISU_PREFIX + key, value: ebisu });
-        batch.push({ type: PUT, key: EVENT_PREFIX + date.toISOString(), value: { result: result, ebisu: ebisu } });
+        batch.push({ type: PUT, key: exports.EBISU_PREFIX + key, value: ebisu });
+        batch.push({ type: PUT, key: exports.EVENT_PREFIX + date.toISOString(), value: { result: result, ebisu: ebisu } });
     }
     quiz.updateQuiz(result, key, args, { date: date, callback: callback });
     return db.batch(batch);
 }
 exports.updateQuiz = updateQuiz;
-function learnQuizzes(db, keys, args, date, opts) {
+function learnQuizzes(db, keys, args, opts) {
     var e_1, _a;
     if (opts === void 0) { opts = {}; }
-    date = date || new Date();
+    var date = opts.date || new Date();
     try {
         for (var keys_1 = __values(keys), keys_1_1 = keys_1.next(); !keys_1_1.done; keys_1_1 = keys_1.next()) {
             var key = keys_1_1.value;
-            quiz.learnQuiz(key, args, { date: date });
+            quiz.learnQuiz(key, args, __assign({}, opts, { date: date }));
         }
     }
     catch (e_1_1) { e_1 = { error: e_1_1 }; }
@@ -17640,9 +18418,13 @@ function learnQuizzes(db, keys, args, date, opts) {
         }
         finally { if (e_1) throw e_1.error; }
     }
-    var prefixEv = EVENT_PREFIX + date.toISOString() + '-';
-    var ops = Array.from(keys, function (key, idx) { return [{ type: PUT, key: prefixEv + idx, value: { opts: opts, ebisu: args.ebisus.get(key) } },
-        { type: PUT, key: EBISU_PREFIX + key, value: args.ebisus.get(key) }]; });
+    var ops = Array.from(keys, function (key, idx) {
+        var uid = date.toISOString() + "-" + idx + "-" + Math.random().toString(36).slice(2);
+        return [
+            { type: PUT, key: exports.EVENT_PREFIX + uid, value: { uid: uid, opts: opts, ebisu: args.ebisus.get(key) } },
+            { type: PUT, key: exports.EBISU_PREFIX + key, value: args.ebisus.get(key) }
+        ];
+    });
     return db.batch(flat1(ops));
 }
 exports.learnQuizzes = learnQuizzes;
@@ -17657,7 +18439,7 @@ function summarizeDb(db) {
 }
 exports.summarizeDb = summarizeDb;
 
-},{"curtiz-parse-markdown":199,"curtiz-quiz-planner":203,"level-js":241,"levelup":248}],207:[function(require,module,exports){
+},{"curtiz-parse-markdown":201,"curtiz-quiz-planner":204,"level-js":243,"levelup":250}],208:[function(require,module,exports){
 var AbstractIterator = require('abstract-leveldown').AbstractIterator
 var inherits = require('inherits')
 
@@ -17696,7 +18478,7 @@ DeferredIterator.prototype.seek = function () {
 
 module.exports = DeferredIterator
 
-},{"abstract-leveldown":191,"inherits":221}],208:[function(require,module,exports){
+},{"abstract-leveldown":191,"inherits":222}],209:[function(require,module,exports){
 var AbstractLevelDOWN = require('abstract-leveldown').AbstractLevelDOWN
 var inherits = require('inherits')
 var DeferredIterator = require('./deferred-iterator')
@@ -17786,7 +18568,7 @@ DeferredLevelDOWN.prototype._serializeValue = function (value) {
 module.exports = DeferredLevelDOWN
 module.exports.DeferredIterator = DeferredIterator
 
-},{"./deferred-iterator":207,"abstract-leveldown":191,"inherits":221}],209:[function(require,module,exports){
+},{"./deferred-iterator":208,"abstract-leveldown":191,"inherits":222}],210:[function(require,module,exports){
 "use strict";
 
 const betaln = require('@stdlib/stdlib/lib/node_modules/@stdlib/math/base/special/betaln');
@@ -17911,7 +18693,7 @@ module.exports = {
   modelToPercentileDecay,
 };
 
-},{"./logsumexp":210,"@stdlib/stdlib/lib/node_modules/@stdlib/math/base/special/betaln":80,"minimize-golden-section-1d":251}],210:[function(require,module,exports){
+},{"./logsumexp":211,"@stdlib/stdlib/lib/node_modules/@stdlib/math/base/special/betaln":80,"minimize-golden-section-1d":253}],211:[function(require,module,exports){
 var exp = Math.exp;
 var log = Math.log;
 var sign = Math.sign;
@@ -17928,7 +18710,7 @@ function logsumexp(a, b) {
 }
 module.exports = logsumexp;
 
-},{}],211:[function(require,module,exports){
+},{}],212:[function(require,module,exports){
 var prr = require('prr')
 
 function init (type, message, cause) {
@@ -17987,7 +18769,7 @@ module.exports = function (errno) {
   }
 }
 
-},{"prr":258}],212:[function(require,module,exports){
+},{"prr":260}],213:[function(require,module,exports){
 var all = module.exports.all = [
   {
     errno: -2,
@@ -18302,7 +19084,7 @@ all.forEach(function (error) {
 module.exports.custom = require('./custom')(module.exports)
 module.exports.create = module.exports.custom.createError
 
-},{"./custom":211}],213:[function(require,module,exports){
+},{"./custom":212}],214:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18827,7 +19609,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],214:[function(require,module,exports){
+},{}],215:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -18913,7 +19695,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],215:[function(require,module,exports){
+},{}],216:[function(require,module,exports){
 'use strict';
 var types = [
   require('./nextTick'),
@@ -19011,7 +19793,7 @@ function immediate(task) {
   }
 }
 
-},{"./messageChannel":216,"./mutation.js":217,"./nextTick":218,"./stateChange":219,"./timeout":220}],216:[function(require,module,exports){
+},{"./messageChannel":217,"./mutation.js":218,"./nextTick":219,"./stateChange":220,"./timeout":221}],217:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -19032,7 +19814,7 @@ exports.install = function (func) {
   };
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],217:[function(require,module,exports){
+},{}],218:[function(require,module,exports){
 (function (global){
 'use strict';
 //based off rsvp https://github.com/tildeio/rsvp.js
@@ -19057,7 +19839,7 @@ exports.install = function (handle) {
   };
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],218:[function(require,module,exports){
+},{}],219:[function(require,module,exports){
 (function (process){
 'use strict';
 exports.test = function () {
@@ -19072,7 +19854,7 @@ exports.install = function (func) {
 };
 
 }).call(this,require('_process'))
-},{"_process":255}],219:[function(require,module,exports){
+},{"_process":257}],220:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -19099,7 +19881,7 @@ exports.install = function (handle) {
   };
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],220:[function(require,module,exports){
+},{}],221:[function(require,module,exports){
 'use strict';
 exports.test = function () {
   return true;
@@ -19110,7 +19892,7 @@ exports.install = function (t) {
     setTimeout(t, 0);
   };
 };
-},{}],221:[function(require,module,exports){
+},{}],222:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -19139,7 +19921,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],222:[function(require,module,exports){
+},{}],223:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -19162,7 +19944,7 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-},{}],223:[function(require,module,exports){
+},{}],224:[function(require,module,exports){
 module.exports      = isTypedArray
 isTypedArray.strict = isStrictTypedArray
 isTypedArray.loose  = isLooseTypedArray
@@ -19205,7 +19987,194 @@ function isLooseTypedArray(arr) {
   return names[toString.call(arr)]
 }
 
-},{}],224:[function(require,module,exports){
+},{}],225:[function(require,module,exports){
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const cross_fetch_1 = __importDefault(require("cross-fetch"));
+const fs_1 = require("fs");
+const strip_bom_1 = __importDefault(require("strip-bom"));
+function getLatestURL(url = 'https://api.github.com/repos/Doublevil/JmdictFurigana/releases/latest', filename = 'JmdictFurigana.txt') {
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = yield cross_fetch_1.default(url);
+        if (!response.ok) {
+            throw new Error('failed to find latest');
+        }
+        const release = yield response.json();
+        if ('assets' in release) {
+            const asset = release.assets.filter(a => 'name' in a).find(a => a.name === filename);
+            if (!asset) {
+                throw new Error('failed to find filename');
+            }
+            return { url: asset.browser_download_url, tag: release.tag_name, filename: filename + '-' + release.tag_name };
+        }
+        else {
+            throw new Error('failed to parse github response, `assets` needed');
+        }
+    });
+}
+exports.getLatestURL = getLatestURL;
+function fileOk(filename) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const stat = yield fs_1.promises.stat(filename);
+            return stat.isFile() && stat.size > 0;
+        }
+        catch (_a) { }
+        return false;
+    });
+}
+function saveLatest(url, filename, overwrite = true) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (!overwrite && (yield fileOk(filename))) {
+            return;
+        }
+        const response = yield cross_fetch_1.default(url);
+        if (!response.ok) {
+            throw new Error('failed to download file ' + url);
+        }
+        const raw = yield response.text();
+        return fs_1.promises.writeFile(filename, raw);
+    });
+}
+exports.saveLatest = saveLatest;
+// 頑張る|がんばる|0:がん;1:ば
+// 大人買い|おとながい|0-1:おとな;2:が
+// オリンピック選手|オリンピックせんしゅ|6:せん;7:しゅ
+function parse(raw) {
+    const lines = raw.split('\n');
+    const ret = [];
+    for (const line of lines) {
+        if (!line) {
+            continue;
+        } // e.g., blank lines at end of file
+        const [text, reading, rawFurigana] = line.split('|');
+        if (!text || !reading || !rawFurigana) {
+            throw new Error('failed to parse line ' + line);
+        }
+        const characters = text.split(''); // we'll replace these with Ruby objects and possibly empty strings
+        const rawFuriganas = rawFurigana.trim().split(';');
+        for (const f of rawFuriganas) {
+            const [range, rt] = f.split(':'); // rt here means the reading that goes on top
+            if (!range || !rt) {
+                throw new Error('failed to split piece ' + f);
+            }
+            const [left, maybeRight] = range.split('-');
+            const lo = parseInt(left);
+            const hi = parseInt(maybeRight || left); // `0:abc` is equivalent to `0-0:abc`
+            characters[lo] = { ruby: text.slice(lo, hi + 1), rt }; // overwrite first character with Ruby object
+            for (let i = lo + 1; i <= hi; i++) {
+                characters[i] = '';
+            } // overwrite rest with empty strings
+        }
+        // merge `['s', 't', 'r', 'i', 'n', 'g', 's']` together into `['strings']`
+        const furigana = normalizeFurigana(characters);
+        ret.push({ text, reading, furigana });
+    }
+    return ret;
+}
+exports.parse = parse;
+function normalizeFurigana(characters) {
+    const furigana = [];
+    const last = (arr) => arr[arr.length - 1];
+    for (const char of characters) {
+        if (!char) {
+            continue;
+        }
+        if (typeof char === 'object' || typeof last(furigana) !== 'string') { // last(furigana) might be undefined
+            furigana.push(char);
+        }
+        else {
+            // via de Morgan theorem, (char=string) && last(merged)=string here
+            furigana[furigana.length - 1] += char;
+        }
+    }
+    return furigana;
+}
+function setter(map, key, value) {
+    const hit = map.get(key);
+    if (hit) {
+        hit.push(value);
+    }
+    else {
+        map.set(key, [value]);
+    }
+}
+function getEntries() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { url, filename } = yield getLatestURL();
+        yield saveLatest(url, filename, false);
+        const ldjson = filename + '.ldjson';
+        let entries;
+        if (!(yield fileOk(ldjson))) {
+            const raw = strip_bom_1.default(yield fs_1.promises.readFile(filename, 'utf8'));
+            entries = parse(raw);
+            yield fs_1.promises.writeFile(ldjson, entries.map(o => JSON.stringify(o)).join('\n'));
+        }
+        else {
+            const raw = yield fs_1.promises.readFile(ldjson, 'utf8');
+            entries = raw.split('\n').map(s => JSON.parse(s));
+        }
+        return entries;
+    });
+}
+exports.getEntries = getEntries;
+function setup() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const entries = yield getEntries();
+        const textToEntry = new Map();
+        const readingToEntry = new Map();
+        for (const entry of entries) {
+            const { reading, text } = entry;
+            setter(textToEntry, text, entry);
+            setter(readingToEntry, reading, entry);
+        }
+        return { textToEntry, readingToEntry };
+    });
+}
+exports.setup = setup;
+function furiganaToString(fs) {
+    const safeRe = /[\{\}]/;
+    if (fs.some(f => safeRe.test(typeof f === 'string' ? f : f.ruby + f.rt))) {
+        throw new Error('Furigana contains {markup}');
+    }
+    return fs.map(f => typeof f === 'string' ? f : `{${f.ruby}}^{${f.rt}}`).join('');
+}
+exports.furiganaToString = furiganaToString;
+function stringToFurigana(s) {
+    const chars = s.split('');
+    const re = /{(.+?)}\^{(.+?)}/g;
+    let match;
+    while (match = re.exec(s)) {
+        const index = match.index || 0; // TypeScript pacification
+        chars[index] = { ruby: match[1], rt: match[2] };
+        for (let i = index + 1; i < index + match[0].length; i++) {
+            chars[i] = '';
+        }
+    }
+    return normalizeFurigana(chars);
+}
+exports.stringToFurigana = stringToFurigana;
+if (module === require.main) {
+    (function main() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { textToEntry, readingToEntry } = yield setup();
+            console.dir([textToEntry.get('漢字'), readingToEntry.get('だいすき')], { depth: null });
+        });
+    })();
+}
+
+},{"cross-fetch":200,"fs":198,"strip-bom":275}],226:[function(require,module,exports){
 var createError = require('errno').create
 var LevelUPError = createError('LevelUPError')
 var NotFoundError = createError('NotFoundError', LevelUPError)
@@ -19223,7 +20192,7 @@ module.exports = {
   EncodingError: createError('EncodingError', LevelUPError)
 }
 
-},{"errno":212}],225:[function(require,module,exports){
+},{"errno":213}],227:[function(require,module,exports){
 var inherits = require('inherits')
 var Readable = require('readable-stream').Readable
 var extend = require('xtend')
@@ -19269,7 +20238,7 @@ ReadStream.prototype._destroy = function (err, callback) {
   })
 }
 
-},{"inherits":221,"readable-stream":240,"xtend":278}],226:[function(require,module,exports){
+},{"inherits":222,"readable-stream":242,"xtend":281}],228:[function(require,module,exports){
 'use strict';
 
 function _inheritsLoose(subClass, superClass) { subClass.prototype = Object.create(superClass.prototype); subClass.prototype.constructor = subClass; subClass.__proto__ = superClass; }
@@ -19398,7 +20367,7 @@ createErrorType('ERR_UNKNOWN_ENCODING', function (arg) {
 createErrorType('ERR_STREAM_UNSHIFT_AFTER_END_EVENT', 'stream.unshift() after end event');
 module.exports.codes = codes;
 
-},{}],227:[function(require,module,exports){
+},{}],229:[function(require,module,exports){
 (function (process){
 'use strict'
 
@@ -19419,7 +20388,7 @@ module.exports.emitExperimentalWarning = process.emitWarning
   : noop;
 
 }).call(this,require('_process'))
-},{"_process":255}],228:[function(require,module,exports){
+},{"_process":257}],230:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -19561,7 +20530,7 @@ Object.defineProperty(Duplex.prototype, 'destroyed', {
   }
 });
 }).call(this,require('_process'))
-},{"./_stream_readable":230,"./_stream_writable":232,"_process":255,"inherits":221}],229:[function(require,module,exports){
+},{"./_stream_readable":232,"./_stream_writable":234,"_process":257,"inherits":222}],231:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -19601,7 +20570,7 @@ function PassThrough(options) {
 PassThrough.prototype._transform = function (chunk, encoding, cb) {
   cb(null, chunk);
 };
-},{"./_stream_transform":231,"inherits":221}],230:[function(require,module,exports){
+},{"./_stream_transform":233,"inherits":222}],232:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -20691,7 +21660,7 @@ function indexOf(xs, x) {
   return -1;
 }
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../errors":226,"../experimentalWarning":227,"./_stream_duplex":228,"./internal/streams/async_iterator":233,"./internal/streams/buffer_list":234,"./internal/streams/destroy":235,"./internal/streams/state":238,"./internal/streams/stream":239,"_process":255,"buffer":198,"events":213,"inherits":221,"string_decoder/":272,"util":197}],231:[function(require,module,exports){
+},{"../errors":228,"../experimentalWarning":229,"./_stream_duplex":230,"./internal/streams/async_iterator":235,"./internal/streams/buffer_list":236,"./internal/streams/destroy":237,"./internal/streams/state":240,"./internal/streams/stream":241,"_process":257,"buffer":199,"events":214,"inherits":222,"string_decoder/":274,"util":197}],233:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -20893,7 +21862,7 @@ function done(stream, er, data) {
   if (stream._transformState.transforming) throw new ERR_TRANSFORM_ALREADY_TRANSFORMING();
   return stream.push(null);
 }
-},{"../errors":226,"./_stream_duplex":228,"inherits":221}],232:[function(require,module,exports){
+},{"../errors":228,"./_stream_duplex":230,"inherits":222}],234:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -21579,7 +22548,7 @@ Writable.prototype._destroy = function (err, cb) {
   cb(err);
 };
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../errors":226,"./_stream_duplex":228,"./internal/streams/destroy":235,"./internal/streams/state":238,"./internal/streams/stream":239,"_process":255,"buffer":198,"inherits":221,"util-deprecate":274}],233:[function(require,module,exports){
+},{"../errors":228,"./_stream_duplex":230,"./internal/streams/destroy":237,"./internal/streams/state":240,"./internal/streams/stream":241,"_process":257,"buffer":199,"inherits":222,"util-deprecate":277}],235:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -21789,7 +22758,7 @@ var createReadableStreamAsyncIterator = function createReadableStreamAsyncIterat
 
 module.exports = createReadableStreamAsyncIterator;
 }).call(this,require('_process'))
-},{"./end-of-stream":236,"_process":255}],234:[function(require,module,exports){
+},{"./end-of-stream":238,"_process":257}],236:[function(require,module,exports){
 'use strict';
 
 function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; var ownKeys = Object.keys(source); if (typeof Object.getOwnPropertySymbols === 'function') { ownKeys = ownKeys.concat(Object.getOwnPropertySymbols(source).filter(function (sym) { return Object.getOwnPropertyDescriptor(source, sym).enumerable; })); } ownKeys.forEach(function (key) { _defineProperty(target, key, source[key]); }); } return target; }
@@ -21979,7 +22948,7 @@ function () {
 
   return BufferList;
 }();
-},{"buffer":198,"util":197}],235:[function(require,module,exports){
+},{"buffer":199,"util":197}],237:[function(require,module,exports){
 (function (process){
 'use strict'; // undocumented cb() API, needed for core, not for public API
 
@@ -22067,7 +23036,7 @@ module.exports = {
   undestroy: undestroy
 };
 }).call(this,require('_process'))
-},{"_process":255}],236:[function(require,module,exports){
+},{"_process":257}],238:[function(require,module,exports){
 // Ported from https://github.com/mafintosh/end-of-stream with
 // permission from the author, Mathias Buus (@mafintosh).
 'use strict';
@@ -22172,7 +23141,7 @@ function eos(stream, opts, callback) {
 }
 
 module.exports = eos;
-},{"../../../errors":226}],237:[function(require,module,exports){
+},{"../../../errors":228}],239:[function(require,module,exports){
 // Ported from https://github.com/mafintosh/pump with
 // permission from the author, Mathias Buus (@mafintosh).
 'use strict';
@@ -22270,7 +23239,7 @@ function pipeline() {
 }
 
 module.exports = pipeline;
-},{"../../../errors":226,"./end-of-stream":236}],238:[function(require,module,exports){
+},{"../../../errors":228,"./end-of-stream":238}],240:[function(require,module,exports){
 'use strict';
 
 var ERR_INVALID_OPT_VALUE = require('../../../errors').codes.ERR_INVALID_OPT_VALUE;
@@ -22298,10 +23267,10 @@ function getHighWaterMark(state, options, duplexKey, isDuplex) {
 module.exports = {
   getHighWaterMark: getHighWaterMark
 };
-},{"../../../errors":226}],239:[function(require,module,exports){
+},{"../../../errors":228}],241:[function(require,module,exports){
 module.exports = require('events').EventEmitter;
 
-},{"events":213}],240:[function(require,module,exports){
+},{"events":214}],242:[function(require,module,exports){
 exports = module.exports = require('./lib/_stream_readable.js');
 exports.Stream = exports;
 exports.Readable = exports;
@@ -22312,7 +23281,7 @@ exports.PassThrough = require('./lib/_stream_passthrough.js');
 exports.finished = require('./lib/internal/streams/end-of-stream.js');
 exports.pipeline = require('./lib/internal/streams/pipeline.js');
 
-},{"./lib/_stream_duplex.js":228,"./lib/_stream_passthrough.js":229,"./lib/_stream_readable.js":230,"./lib/_stream_transform.js":231,"./lib/_stream_writable.js":232,"./lib/internal/streams/end-of-stream.js":236,"./lib/internal/streams/pipeline.js":237}],241:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":230,"./lib/_stream_passthrough.js":231,"./lib/_stream_readable.js":232,"./lib/_stream_transform.js":233,"./lib/_stream_writable.js":234,"./lib/internal/streams/end-of-stream.js":238,"./lib/internal/streams/pipeline.js":239}],243:[function(require,module,exports){
 (function (Buffer){
 /* global indexedDB */
 
@@ -22531,7 +23500,7 @@ Level.destroy = function (location, prefix, callback) {
 }
 
 }).call(this,{"isBuffer":require("../is-buffer/index.js")})
-},{"../is-buffer/index.js":222,"./iterator":242,"./util/immediate":243,"./util/mixed-to-buffer":244,"./util/support":245,"abstract-leveldown":191,"inherits":221}],242:[function(require,module,exports){
+},{"../is-buffer/index.js":223,"./iterator":244,"./util/immediate":245,"./util/mixed-to-buffer":246,"./util/support":247,"abstract-leveldown":191,"inherits":222}],244:[function(require,module,exports){
 /* global IDBKeyRange */
 
 'use strict'
@@ -22692,10 +23661,10 @@ Iterator.prototype._end = function (callback) {
   this.onComplete = callback
 }
 
-},{"./util/immediate":243,"./util/mixed-to-buffer":244,"abstract-leveldown":191,"inherits":221,"ltgt":250}],243:[function(require,module,exports){
+},{"./util/immediate":245,"./util/mixed-to-buffer":246,"abstract-leveldown":191,"inherits":222,"ltgt":252}],245:[function(require,module,exports){
 module.exports = require('immediate')
 
-},{"immediate":215}],244:[function(require,module,exports){
+},{"immediate":216}],246:[function(require,module,exports){
 (function (Buffer){
 'use strict'
 
@@ -22708,7 +23677,7 @@ module.exports = function (value) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":198,"typedarray-to-buffer":273}],245:[function(require,module,exports){
+},{"buffer":199,"typedarray-to-buffer":276}],247:[function(require,module,exports){
 'use strict'
 
 exports.test = function (key) {
@@ -22725,7 +23694,7 @@ exports.test = function (key) {
 exports.binaryKeys = exports.test(new Uint8Array(0))
 exports.arrayKeys = exports.test([1])
 
-},{}],246:[function(require,module,exports){
+},{}],248:[function(require,module,exports){
 var WriteError = require('level-errors').WriteError
 var promisify = require('./promisify')
 var getCallback = require('./common').getCallback
@@ -22806,7 +23775,7 @@ Batch.prototype.write = function (options, callback) {
 
 module.exports = Batch
 
-},{"./common":247,"./promisify":249,"level-errors":224}],247:[function(require,module,exports){
+},{"./common":249,"./promisify":251,"level-errors":226}],249:[function(require,module,exports){
 exports.getCallback = function (options, callback) {
   return typeof options === 'function' ? options : callback
 }
@@ -22815,7 +23784,7 @@ exports.getOptions = function (options) {
   return typeof options === 'object' && options !== null ? options : {}
 }
 
-},{}],248:[function(require,module,exports){
+},{}],250:[function(require,module,exports){
 (function (process){
 var EventEmitter = require('events').EventEmitter
 var inherits = require('util').inherits
@@ -23127,7 +24096,7 @@ LevelUP.errors = errors
 module.exports = LevelUP.default = LevelUP
 
 }).call(this,require('_process'))
-},{"./batch":246,"./common":247,"./promisify":249,"_process":255,"assert":192,"deferred-leveldown":208,"events":213,"level-errors":224,"level-iterator-stream":225,"util":277,"xtend":278}],249:[function(require,module,exports){
+},{"./batch":248,"./common":249,"./promisify":251,"_process":257,"assert":192,"deferred-leveldown":209,"events":214,"level-errors":226,"level-iterator-stream":227,"util":280,"xtend":281}],251:[function(require,module,exports){
 function promisify () {
   var callback
   var promise = new Promise(function (resolve, reject) {
@@ -23142,7 +24111,7 @@ function promisify () {
 
 module.exports = promisify
 
-},{}],250:[function(require,module,exports){
+},{}],252:[function(require,module,exports){
 (function (Buffer){
 
 exports.compare = function (a, b) {
@@ -23311,7 +24280,7 @@ exports.filter = function (range, compare) {
 
 
 }).call(this,{"isBuffer":require("../is-buffer/index.js")})
-},{"../is-buffer/index.js":222}],251:[function(require,module,exports){
+},{"../is-buffer/index.js":223}],253:[function(require,module,exports){
 'use strict';
 
 var goldenSectionMinimize = require('./src/golden-section-minimize');
@@ -23360,7 +24329,7 @@ module.exports = function minimize (f, options, status) {
   return goldenSectionMinimize(f, bounds[0], bounds[1], tolerance, maxIterations, status);
 };
 
-},{"./src/bracket-minimum":252,"./src/golden-section-minimize":253}],252:[function(require,module,exports){
+},{"./src/bracket-minimum":254,"./src/golden-section-minimize":255}],254:[function(require,module,exports){
 'use strict';
 
 module.exports = bracketMinimum;
@@ -23420,7 +24389,7 @@ function bracketMinimum (bounds, f, x0, dx, xMin, xMax, maxIter) {
   return bounds;
 }
 
-},{}],253:[function(require,module,exports){
+},{}],255:[function(require,module,exports){
 'use strict';
 
 var PHI_RATIO = 2 / (1 + Math.sqrt(5));
@@ -23487,7 +24456,7 @@ function goldenSectionMinimize (f, xL, xU, tol, maxIterations, status) {
   }
 }
 
-},{}],254:[function(require,module,exports){
+},{}],256:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -23579,7 +24548,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],255:[function(require,module,exports){
+},{}],257:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -23765,7 +24734,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],256:[function(require,module,exports){
+},{}],258:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -23871,7 +24840,7 @@ checkPropTypes.resetWarningCache = function() {
 module.exports = checkPropTypes;
 
 }).call(this,require('_process'))
-},{"./lib/ReactPropTypesSecret":257,"_process":255}],257:[function(require,module,exports){
+},{"./lib/ReactPropTypesSecret":259,"_process":257}],259:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -23885,7 +24854,7 @@ var ReactPropTypesSecret = 'SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED';
 
 module.exports = ReactPropTypesSecret;
 
-},{}],258:[function(require,module,exports){
+},{}],260:[function(require,module,exports){
 /*!
   * prr
   * (c) 2013 Rod Vagg <rod@vagg.org>
@@ -23949,7 +24918,7 @@ module.exports = ReactPropTypesSecret;
 
   return prr
 })
-},{}],259:[function(require,module,exports){
+},{}],261:[function(require,module,exports){
 (function (process){
 /** @license React v16.8.6
  * react-dom.development.js
@@ -45231,7 +46200,7 @@ module.exports = reactDom;
 }
 
 }).call(this,require('_process'))
-},{"_process":255,"object-assign":254,"prop-types/checkPropTypes":256,"react":264,"scheduler":270,"scheduler/tracing":271}],260:[function(require,module,exports){
+},{"_process":257,"object-assign":256,"prop-types/checkPropTypes":258,"react":266,"scheduler":272,"scheduler/tracing":273}],262:[function(require,module,exports){
 /** @license React v16.8.6
  * react-dom.production.min.js
  *
@@ -45502,7 +46471,7 @@ x("38"):void 0;return Si(a,b,c,!1,d)},unmountComponentAtNode:function(a){Qi(a)?v
 X;X=!0;try{ki(a)}finally{(X=b)||W||Yh(1073741823,!1)}},__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{Events:[Ia,Ja,Ka,Ba.injectEventPluginsByName,pa,Qa,function(a){ya(a,Pa)},Eb,Fb,Dd,Da]}};function Ui(a,b){Qi(a)?void 0:x("299","unstable_createRoot");return new Pi(a,!0,null!=b&&!0===b.hydrate)}
 (function(a){var b=a.findFiberByHostInstance;return Te(n({},a,{overrideProps:null,currentDispatcherRef:Tb.ReactCurrentDispatcher,findHostInstanceByFiber:function(a){a=hd(a);return null===a?null:a.stateNode},findFiberByHostInstance:function(a){return b?b(a):null}}))})({findFiberByHostInstance:Ha,bundleType:0,version:"16.8.6",rendererPackageName:"react-dom"});var Wi={default:Vi},Xi=Wi&&Vi||Wi;module.exports=Xi.default||Xi;
 
-},{"object-assign":254,"react":264,"scheduler":270}],261:[function(require,module,exports){
+},{"object-assign":256,"react":266,"scheduler":272}],263:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -45544,7 +46513,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react-dom.development.js":259,"./cjs/react-dom.production.min.js":260,"_process":255}],262:[function(require,module,exports){
+},{"./cjs/react-dom.development.js":261,"./cjs/react-dom.production.min.js":262,"_process":257}],264:[function(require,module,exports){
 (function (process){
 /** @license React v16.8.6
  * react.development.js
@@ -47449,7 +48418,7 @@ module.exports = react;
 }
 
 }).call(this,require('_process'))
-},{"_process":255,"object-assign":254,"prop-types/checkPropTypes":256}],263:[function(require,module,exports){
+},{"_process":257,"object-assign":256,"prop-types/checkPropTypes":258}],265:[function(require,module,exports){
 /** @license React v16.8.6
  * react.production.min.js
  *
@@ -47476,7 +48445,7 @@ b,d){return W().useImperativeHandle(a,b,d)},useDebugValue:function(){},useLayout
 b){void 0!==b.ref&&(h=b.ref,f=J.current);void 0!==b.key&&(g=""+b.key);var l=void 0;a.type&&a.type.defaultProps&&(l=a.type.defaultProps);for(c in b)K.call(b,c)&&!L.hasOwnProperty(c)&&(e[c]=void 0===b[c]&&void 0!==l?l[c]:b[c])}c=arguments.length-2;if(1===c)e.children=d;else if(1<c){l=Array(c);for(var m=0;m<c;m++)l[m]=arguments[m+2];e.children=l}return{$$typeof:p,type:a.type,key:g,ref:h,props:e,_owner:f}},createFactory:function(a){var b=M.bind(null,a);b.type=a;return b},isValidElement:N,version:"16.8.6",
 unstable_ConcurrentMode:x,unstable_Profiler:u,__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{ReactCurrentDispatcher:I,ReactCurrentOwner:J,assign:k}},Y={default:X},Z=Y&&X||Y;module.exports=Z.default||Z;
 
-},{"object-assign":254}],264:[function(require,module,exports){
+},{"object-assign":256}],266:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -47487,7 +48456,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react.development.js":262,"./cjs/react.production.min.js":263,"_process":255}],265:[function(require,module,exports){
+},{"./cjs/react.development.js":264,"./cjs/react.production.min.js":265,"_process":257}],267:[function(require,module,exports){
 /* eslint-disable node/no-deprecated-api */
 var buffer = require('buffer')
 var Buffer = buffer.Buffer
@@ -47551,7 +48520,7 @@ SafeBuffer.allocUnsafeSlow = function (size) {
   return buffer.SlowBuffer(size)
 }
 
-},{"buffer":198}],266:[function(require,module,exports){
+},{"buffer":199}],268:[function(require,module,exports){
 (function (process){
 /** @license React v0.13.6
  * scheduler-tracing.development.js
@@ -47978,7 +48947,7 @@ exports.unstable_unsubscribe = unstable_unsubscribe;
 }
 
 }).call(this,require('_process'))
-},{"_process":255}],267:[function(require,module,exports){
+},{"_process":257}],269:[function(require,module,exports){
 /** @license React v0.13.6
  * scheduler-tracing.production.min.js
  *
@@ -47990,7 +48959,7 @@ exports.unstable_unsubscribe = unstable_unsubscribe;
 
 'use strict';Object.defineProperty(exports,"__esModule",{value:!0});var b=0;exports.__interactionsRef=null;exports.__subscriberRef=null;exports.unstable_clear=function(a){return a()};exports.unstable_getCurrent=function(){return null};exports.unstable_getThreadID=function(){return++b};exports.unstable_trace=function(a,d,c){return c()};exports.unstable_wrap=function(a){return a};exports.unstable_subscribe=function(){};exports.unstable_unsubscribe=function(){};
 
-},{}],268:[function(require,module,exports){
+},{}],270:[function(require,module,exports){
 (function (process,global){
 /** @license React v0.13.6
  * scheduler.development.js
@@ -48693,7 +49662,7 @@ exports.unstable_getFirstCallbackNode = unstable_getFirstCallbackNode;
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":255}],269:[function(require,module,exports){
+},{"_process":257}],271:[function(require,module,exports){
 (function (global){
 /** @license React v0.13.6
  * scheduler.production.min.js
@@ -48718,7 +49687,7 @@ b=c.previous;b.next=c.previous=a;a.next=c;a.previous=b}return a};exports.unstabl
 exports.unstable_shouldYield=function(){return!e&&(null!==d&&d.expirationTime<l||w())};exports.unstable_continueExecution=function(){null!==d&&p()};exports.unstable_pauseExecution=function(){};exports.unstable_getFirstCallbackNode=function(){return d};
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],270:[function(require,module,exports){
+},{}],272:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -48729,7 +49698,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/scheduler.development.js":268,"./cjs/scheduler.production.min.js":269,"_process":255}],271:[function(require,module,exports){
+},{"./cjs/scheduler.development.js":270,"./cjs/scheduler.production.min.js":271,"_process":257}],273:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -48740,7 +49709,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/scheduler-tracing.development.js":266,"./cjs/scheduler-tracing.production.min.js":267,"_process":255}],272:[function(require,module,exports){
+},{"./cjs/scheduler-tracing.development.js":268,"./cjs/scheduler-tracing.production.min.js":269,"_process":257}],274:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -49037,7 +50006,24 @@ function simpleWrite(buf) {
 function simpleEnd(buf) {
   return buf && buf.length ? this.write(buf) : '';
 }
-},{"safe-buffer":265}],273:[function(require,module,exports){
+},{"safe-buffer":267}],275:[function(require,module,exports){
+'use strict';
+
+module.exports = string => {
+	if (typeof string !== 'string') {
+		throw new TypeError(`Expected a string, got ${typeof string}`);
+	}
+
+	// Catches EFBBBF (UTF-8 BOM) because the buffer-to-string
+	// conversion translates it to FEFF (UTF-16 BOM)
+	if (string.charCodeAt(0) === 0xFEFF) {
+		return string.slice(1);
+	}
+
+	return string;
+};
+
+},{}],276:[function(require,module,exports){
 (function (Buffer){
 /**
  * Convert a typed array to a Buffer without a copy
@@ -49066,7 +50052,7 @@ module.exports = function typedarrayToBuffer (arr) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":198,"is-typedarray":223}],274:[function(require,module,exports){
+},{"buffer":199,"is-typedarray":224}],277:[function(require,module,exports){
 (function (global){
 
 /**
@@ -49137,13 +50123,13 @@ function config (name) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],275:[function(require,module,exports){
+},{}],278:[function(require,module,exports){
 arguments[4][193][0].apply(exports,arguments)
-},{"dup":193}],276:[function(require,module,exports){
+},{"dup":193}],279:[function(require,module,exports){
 arguments[4][194][0].apply(exports,arguments)
-},{"dup":194}],277:[function(require,module,exports){
+},{"dup":194}],280:[function(require,module,exports){
 arguments[4][195][0].apply(exports,arguments)
-},{"./support/isBuffer":276,"_process":255,"dup":195,"inherits":275}],278:[function(require,module,exports){
+},{"./support/isBuffer":279,"_process":257,"dup":195,"inherits":278}],281:[function(require,module,exports){
 module.exports = extend
 
 var hasOwnProperty = Object.prototype.hasOwnProperty;
