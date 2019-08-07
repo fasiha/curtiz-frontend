@@ -44,7 +44,10 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
       'ul',
       null,
       props.block.map((line, i) => {
-        const keys = Array.from(props.graph.raws.get(raw[i]) || []);
+        const keys = Array.from(props.graph.raws.get(raw[i]) || []).filter(key => {
+          const hit = props.graph.nodes.get(key);
+          return hit ? !hit.writing : false;
+        });
         return ce(
             'li',
             {key: i},
