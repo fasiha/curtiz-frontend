@@ -22,6 +22,7 @@
     "typescript": "^3.5.2"
   },
   "dependencies": {
+    "array-shuffle": "^1.0.1",
     "curtiz-parse-markdown": "git+https://github.com/fasiha/curtiz-parse-markdown.git",
     "curtiz-quiz-planner": "git+https://github.com/fasiha/curtiz-quiz-planner.git",
     "curtiz-utils": "git+https://github.com/fasiha/curtiz-utils.git",

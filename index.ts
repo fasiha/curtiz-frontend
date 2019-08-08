@@ -3,6 +3,7 @@ import {Quiz, QuizGraph, QuizKind, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
 import {groupBy, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
+import {furiganaToString} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
 import React, {useEffect, useReducer, useState} from 'react';
@@ -90,24 +91,36 @@ function wrap(s: string) { return `_(${s})_` }
 function crossMatch(long: string[], short: string[]): boolean {
   return long.length >= short.length ? long.some(a => short.includes(a)) : crossMatch(short, long);
 }
+const shuf: (v: any[]) => any[] = require('array-shuffle');
+
 function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summary: string) => any}) {
   const quiz = props.quiz;
-  let grader: (s: string) => boolean;
-  let prompt = '';
-  if (quiz.kind === 'cloze') {
-    let promptIdx = 0;
-    prompt = (quiz.contexts.map(context => context === null ? (quiz.prompts && wrap(quiz.prompts[promptIdx++]) || '___')
-                                                            : context))
-                 .join('');
-    if (quiz.translation && quiz.translation.en) { prompt += ` (${quiz.translation.en})`; }
-    grader = (s: string) => crossMatch(quiz.clozes[0], [s, kata2hira(s)]);
-
-  } else if (quiz.kind === 'card') {
-    prompt = quiz.prompt + ((quiz.translation && quiz.translation.en) ? ` (${quiz.translation.en})` : '');
-    grader = (s: string) => crossMatch(quiz.responses.concat(quiz.prompt), [s, kata2hira(s)]);
-  } else {
-    throw new Error('unknown quiz type');
-  }
+  type GraderType = (s: string) => boolean;
+  const [{grader, prompt}, setGraderPrompt] = useState(() => {
+    let grader: GraderType;
+    let prompt = '';
+    if (quiz.kind === QuizKind.Cloze) {
+      let promptIdx = 0;
+      prompt = (quiz.contexts.map(
+                    context => context === null ? (quiz.prompts && wrap(quiz.prompts[promptIdx++]) || '___') : context))
+                   .join('');
+      if (quiz.translation && quiz.translation.en) { prompt += ` (${quiz.translation.en})`; }
+      grader = (s: string) => crossMatch(quiz.clozes[0], [s, kata2hira(s)]);
+    } else if (quiz.kind === QuizKind.Card) {
+      prompt = quiz.prompt + ((quiz.translation && quiz.translation.en) ? ` (${quiz.translation.en})` : '');
+      grader = (s: string) => crossMatch(quiz.responses.concat(quiz.prompt), [s, kata2hira(s)]);
+    } else if (quiz.kind === QuizKind.Match) {
+      const idxs: number[] = shuf(Array.from(Array(quiz.pairs.length), (_, n) => n));
+      const texts = quiz.pairs.map((o, i) => `(${i})` + furiganaToString(o.text));
+      const tls = quiz.pairs.map(o => o.translation['en']);
+      const shuffledTls = idxs.map(i => tls[i] + '=?');
+      prompt = `Match ${texts.join(' — ')}. ${shuffledTls.join(' — ')}`;
+      grader = (s: string) => s === idxs.join('');
+    } else {
+      throw new Error('unknown quiz type');
+    }
+    return {grader, prompt};
+  })
 
   const [input, setInput] = useState('');
 
@@ -117,7 +130,7 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
               onClick: () => {
                 const grade = grader(input);
                 const summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
-                                `「${input}」for ${prompt}`;
+                                `「${input}」for ${prompt}` + (quiz.lede ? ` ${furiganaToString(quiz.lede)}` : '');
                 props.update(grade, quiz.uniqueId, summary);
                 setInput('');
               }
