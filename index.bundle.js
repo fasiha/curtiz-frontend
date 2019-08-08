@@ -140,6 +140,16 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var __values = (this && this.__values) || function (o) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator], i = 0;
+    if (m) return m.call(o);
+    return {
+        next: function () {
+            if (o && i >= o.length) o = void 0;
+            return { value: o && o[i++], done: !o };
+        }
+    };
+};
 var __read = (this && this.__read) || function (o, n) {
     var m = typeof Symbol === "function" && o[Symbol.iterator];
     if (!m) return o;
@@ -159,16 +169,6 @@ var __read = (this && this.__read) || function (o, n) {
 var __spread = (this && this.__spread) || function () {
     for (var ar = [], i = 0; i < arguments.length; i++) ar = ar.concat(__read(arguments[i]));
     return ar;
-};
-var __values = (this && this.__values) || function (o) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator], i = 0;
-    if (m) return m.call(o);
-    return {
-        next: function () {
-            if (o && i >= o.length) o = void 0;
-            return { value: o && o[i++], done: !o };
-        }
-    };
 };
 var __importStar = (this && this.__importStar) || function (mod) {
     if (mod && mod.__esModule) return mod;
@@ -191,6 +191,24 @@ var react_dom_1 = __importDefault(require("react-dom"));
 var docs_1 = require("./docs");
 var Edit_1 = require("./Edit");
 var ce = react_1.default.createElement;
+function FuriganaComponent(props) {
+    var e_1, _a;
+    var arr = [];
+    try {
+        for (var _b = __values(props.furigana), _c = _b.next(); !_c.done; _c = _b.next()) {
+            var f = _c.value;
+            arr.push(typeof f === 'string' ? f : ce('ruby', null, f.ruby, ce('rt', null, f.rt)));
+        }
+    }
+    catch (e_1_1) { e_1 = { error: e_1_1 }; }
+    finally {
+        try {
+            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+        }
+        finally { if (e_1) throw e_1.error; }
+    }
+    return ce.apply(void 0, __spread(['span', {}], arr));
+}
 function blockToUnlearnedKeys(block, graph) {
     var raws = block.map(function (line, lino) { return block[0] + (lino ? '\n' + line : ''); });
     return new Map(raws.map(function (raw, idx) {
@@ -212,7 +230,7 @@ function Block(props) {
     var raw = props.block.map(function (line, lino) { return props.block[0] + (lino ? '\n' + line : ''); });
     var _a = __read(react_1.useState(function () { return blockToUnlearnedKeys(props.block, props.graph); }), 2), unlearned = _a[0], setUnlearned = _a[1];
     return ce('ul', null, props.block.map(function (line, i) {
-        var keys = Array.from(props.graph.raws.get(raw[i]) || []);
+        var keys = Array.from(props.graph.raws.get(raw[i]) || []); // FIXME repeating work? cf. `unlearned`
         var unlearnedKeys = keys.filter(function (key) { return !props.graph.ebisus.has(key); });
         var typeToKeys = curtiz_utils_1.groupBy(unlearnedKeys, function (key) {
             var hit = props.graph.nodes.get(key);
@@ -235,7 +253,7 @@ function Block(props) {
         });
         return ce.apply(void 0, __spread(['li',
             { key: i },
-            line], (!props.graph.raws.has(raw[i]) ? ['!'] : buttons)));
+            line.includes('@furigana') ? FuriganaComponent({ furigana: jmdict_furigana_node_1.stringToFurigana(line) }) : line], (!props.graph.raws.has(raw[i]) ? [''] : buttons)));
     }));
 }
 function Learn(props) {
@@ -323,8 +341,8 @@ function Main() {
     var _b = __read(react_1.useState(defaultGraphsMap), 2), graphsMap = _b[0], setGraphsMap = _b[1];
     function loader() {
         return __awaiter(this, void 0, void 0, function () {
-            var newdb, docs, date, newName, graphs, docs_2, docs_2_1, doc, _a, _b, _c, _d, e_1, e_2_1;
-            var e_2, _e;
+            var newdb, docs, date, newName, graphs, docs_2, docs_2_1, doc, _a, _b, _c, _d, e_2, e_3_1;
+            var e_3, _e;
             return __generator(this, function (_f) {
                 switch (_f.label) {
                     case 0:
@@ -358,23 +376,23 @@ function Main() {
                         _b.apply(_a, _c.concat([__assign.apply(void 0, _d.concat([_f.sent(), { doc: doc }]))]));
                         return [3 /*break*/, 7];
                     case 6:
-                        e_1 = _f.sent();
+                        e_2 = _f.sent();
                         alert('Error caught. See JS Console');
-                        console.error('Error analyzing text. Skipping', e_1);
+                        console.error('Error analyzing text. Skipping', e_2);
                         return [3 /*break*/, 7];
                     case 7:
                         docs_2_1 = docs_2.next();
                         return [3 /*break*/, 3];
                     case 8: return [3 /*break*/, 11];
                     case 9:
-                        e_2_1 = _f.sent();
-                        e_2 = { error: e_2_1 };
+                        e_3_1 = _f.sent();
+                        e_3 = { error: e_3_1 };
                         return [3 /*break*/, 11];
                     case 10:
                         try {
                             if (docs_2_1 && !docs_2_1.done && (_e = docs_2.return)) _e.call(docs_2);
                         }
-                        finally { if (e_2) throw e_2.error; }
+                        finally { if (e_3) throw e_3.error; }
                         return [7 /*endfinally*/];
                     case 11:
                         setGraphsMap(graphs);
@@ -386,7 +404,7 @@ function Main() {
     react_1.useEffect(function () { loader(); }, [0]);
     function updateDoc(doc) {
         return __awaiter(this, void 0, void 0, function () {
-            var _a, _b, _c, _d, e_3;
+            var _a, _b, _c, _d, e_4;
             return __generator(this, function (_e) {
                 switch (_e.label) {
                     case 0:
@@ -405,9 +423,9 @@ function Main() {
                         _b.apply(_a, _c.concat([__assign.apply(void 0, _d.concat([_e.sent(), { doc: doc }]))]));
                         return [3 /*break*/, 4];
                     case 3:
-                        e_3 = _e.sent();
+                        e_4 = _e.sent();
                         alert('Error caught. See JS Console');
-                        console.error('Error analyzing text. Skipping', e_3);
+                        console.error('Error analyzing text. Skipping', e_4);
                         return [3 /*break*/, 4];
                     case 4: return [2 /*return*/];
                 }
@@ -448,30 +466,6 @@ function markdownToBlocks(md) {
     var headers = curtiz_utils_1.partitionBy(md.split('\n'), function (s) { return re.test(s); });
     return headers;
 }
-function isRawLearned(raw, GRAPH) {
-    var e_4, _a;
-    var set = GRAPH.raws.get(raw);
-    if (!set) {
-        return false;
-    }
-    try {
-        for (var set_1 = __values(set), set_1_1 = set_1.next(); !set_1_1.done; set_1_1 = set_1.next()) {
-            var key = set_1_1.value;
-            if (GRAPH.ebisus.has(key)) {
-                return true;
-            }
-        }
-    }
-    catch (e_4_1) { e_4 = { error: e_4_1 }; }
-    finally {
-        try {
-            if (set_1_1 && !set_1_1.done && (_a = set_1.return)) _a.call(set_1);
-        }
-        finally { if (e_4) throw e_4.error; }
-    }
-    return false;
-}
-function isRawLearnable(raw, GRAPH) { return GRAPH.raws.has(raw); }
 
 },{"./Edit":1,"./docs":2,"array-shuffle":192,"curtiz-parse-markdown":202,"curtiz-quiz-planner":205,"curtiz-utils":206,"curtiz-web-db":208,"jmdict-furigana-node":226,"react":267,"react-dom":264}],4:[function(require,module,exports){
 /**

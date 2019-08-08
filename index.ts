@@ -1,9 +1,9 @@
 import {AbstractIterator} from 'abstract-leveldown';
 import {Quiz, QuizGraph, QuizKind, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
-import {groupBy, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
+import {flatMapIterator, groupBy, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
-import {furiganaToString} from 'jmdict-furigana-node';
+import {Furigana, furiganaToString, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
 import React, {useEffect, useReducer, useState} from 'react';
@@ -15,6 +15,14 @@ import {Edit} from './Edit';
 const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu&{doc: Doc};
+
+function FuriganaComponent(props: {furigana: Furigana[]}) {
+  const arr = [];
+  for (const f of props.furigana) {
+    arr.push(typeof f === 'string' ? f : ce('ruby', null, f.ruby, ce('rt', null, f.rt)));
+  }
+  return ce('span', {}, ...arr);
+}
 
 function blockToUnlearnedKeys(block: string[], graph: GraphType): Map<number, Set<string>> {
   const raws = block.map((line, lino) => block[0] + (lino ? '\n' + line : ''));
@@ -40,7 +48,7 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
       'ul',
       null,
       props.block.map((line, i) => {
-        const keys = Array.from(props.graph.raws.get(raw[i]) || []);
+        const keys = Array.from(props.graph.raws.get(raw[i]) || []); // FIXME repeating work? cf. `unlearned`
         const unlearnedKeys = keys.filter(key => !props.graph.ebisus.has(key));
         const typeToKeys = groupBy(unlearnedKeys, key => {
           const hit = props.graph.nodes.get(key);
@@ -71,8 +79,8 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
         return ce(
             'li',
             {key: i},
-            line,
-            ...(!props.graph.raws.has(raw[i]) ? ['!'] : buttons),
+            line.includes('@furigana') ? FuriganaComponent({furigana: stringToFurigana(line)}) : line,
+            ...(!props.graph.raws.has(raw[i]) ? [''] : buttons),
         );
       }),
   )
@@ -252,14 +260,3 @@ function markdownToBlocks(md: string) {
   const headers = partitionBy(md.split('\n'), s => re.test(s));
   return headers;
 }
-
-function isRawLearned(raw: string, GRAPH: GraphType): boolean {
-  const set = GRAPH.raws.get(raw);
-  if (!set) { return false; }
-  for (const key of set) {
-    if (GRAPH.ebisus.has(key)) { return true; }
-  }
-  return false;
-}
-
-function isRawLearnable(raw: string, GRAPH: GraphType): boolean { return GRAPH.raws.has(raw); }
