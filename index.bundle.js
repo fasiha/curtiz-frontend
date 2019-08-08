@@ -156,6 +156,10 @@ var __read = (this && this.__read) || function (o, n) {
     }
     return ar;
 };
+var __spread = (this && this.__spread) || function () {
+    for (var ar = [], i = 0; i < arguments.length; i++) ar = ar.concat(__read(arguments[i]));
+    return ar;
+};
 var __values = (this && this.__values) || function (o) {
     var m = typeof Symbol === "function" && o[Symbol.iterator], i = 0;
     if (m) return m.call(o);
@@ -185,33 +189,51 @@ var react_dom_1 = __importDefault(require("react-dom"));
 var docs_1 = require("./docs");
 var Edit_1 = require("./Edit");
 var ce = react_1.default.createElement;
-function blockReducer(state, action) {
-    if (action.type === 'learn') {
-        state.learned[action.payload] = true;
-        action.learn();
-        return __assign({}, state);
-    }
-    else {
-        throw new Error('unknown action');
-    }
+function blockToUnlearnedKeys(block, graph) {
+    var raws = block.map(function (line, lino) { return block[0] + (lino ? '\n' + line : ''); });
+    return new Map(raws.map(function (raw, idx) {
+        var keys = Array.from(graph.raws.get(raw) || []).filter(function (key) { return !graph.ebisus.has(key); });
+        return [idx, new Set(keys)];
+    }));
 }
+var subkind2type = {
+    passive: 'basic',
+    seePrompt: 'kread',
+    seeResponses: 'kwrite',
+    regular: 'basic',
+    noHint: 'basic',
+    promptHint: 'kread',
+    responsesHint: 'kwrite',
+};
+var subtypes = new Set(Object.values(subkind2type));
 function Block(props) {
     var raw = props.block.map(function (line, lino) { return props.block[0] + (lino ? '\n' + line : ''); });
-    var learned = function (x) { return isRawLearned(x, props.graph); };
-    var learnable = function (x) { return isRawLearnable(x, props.graph); };
-    var init = { learned: raw.map(function (r) { return learnable(r) ? learned(r) : undefined; }) };
-    var _a = __read(react_1.useReducer(blockReducer, init), 2), state = _a[0], dispatch = _a[1];
+    var _a = __read(react_1.useState(function () { return blockToUnlearnedKeys(props.block, props.graph); }), 2), unlearned = _a[0], setUnlearned = _a[1];
     return ce('ul', null, props.block.map(function (line, i) {
-        var keys = Array.from(props.graph.raws.get(raw[i]) || []).filter(function (key) {
+        var keys = Array.from(props.graph.raws.get(raw[i]) || []);
+        var unlearnedKeys = keys.filter(function (key) { return !props.graph.ebisus.has(key); });
+        var typeToKeys = curtiz_utils_1.groupBy(unlearnedKeys, function (key) {
             var hit = props.graph.nodes.get(key);
-            return hit ? !hit.writing : false;
+            return hit ? ('subkind' in hit ? subkind2type[hit.subkind] : 'basic') : 'basic';
         });
-        return ce('li', { key: i }, line, state.learned[i] === undefined
-            ? ''
-            : (state.learned[i] ? ' [learned!] '
-                : ce('button', {
-                    onClick: function () { return dispatch({ type: 'learn', payload: i, learn: function () { return props.learn(keys, props.graph); } }); }
-                }, "Learn " + keys.length)));
+        var buttons = Array.from(subtypes, function (type) {
+            var learnedKeys = typeToKeys.get(type) || [];
+            return ce('button', {
+                disabled: learnedKeys.length === 0,
+                onClick: function () {
+                    var next = new Map(unlearned);
+                    var oldKeys = next.get(i);
+                    if (oldKeys && learnedKeys) {
+                        learnedKeys.forEach(function (k) { return oldKeys.delete(k); });
+                        setUnlearned(next);
+                        props.learn(learnedKeys, props.graph);
+                    }
+                }
+            }, "Learn " + learnedKeys.length + " " + type + "s");
+        });
+        return ce.apply(void 0, __spread(['li',
+            { key: i },
+            line], (!props.graph.raws.has(raw[i]) ? ['!'] : buttons)));
     }));
 }
 function Learn(props) {
@@ -17497,15 +17519,8 @@ function _separateAtSeparateds(s, n = 0) {
     return { atSeparatedValues, adverbs };
 }
 exports._separateAtSeparateds = _separateAtSeparateds;
-function makeCard(prompt, responses, passive, writing) {
-    return {
-        prompt,
-        responses,
-        uniqueId: JSON.stringify({ prompt, responses, passive }),
-        kind: QuizKind.Card,
-        passive,
-        writing,
-    };
+function makeCard(init) {
+    return Object.assign({}, init, { uniqueId: JSON.stringify({ prompt: init.prompt, responses: init.responses, subkind: init.subkind }), kind: QuizKind.Card });
 }
 exports.makeCard = makeCard;
 function extractShortTranslation(adverbs) {
@@ -17522,12 +17537,12 @@ const RESPONSE_SEP = '・';
 function promptResponsesToCards(prompt, responses) {
     const passiveconstant = true;
     const invertedconstant = true;
-    const PASSIVE = makeCard(prompt, responses, passiveconstant, !invertedconstant);
+    const PASSIVE = makeCard({ prompt, responses, subkind: 'passive' });
     let SEEPROMPT;
     let SEERESPONSE;
     if ((responses.length > 1 || responses[0] !== prompt)) {
-        SEEPROMPT = makeCard(prompt, responses, !passiveconstant, !invertedconstant);
-        SEERESPONSE = makeCard(responses.join(RESPONSE_SEP), [prompt], !passiveconstant, invertedconstant);
+        SEEPROMPT = makeCard({ prompt, responses, subkind: 'seePrompt' });
+        SEERESPONSE = makeCard({ prompt: responses.join(RESPONSE_SEP), responses: [prompt], subkind: 'seeResponses' });
     }
     return { PASSIVE, SEEPROMPT, SEERESPONSE };
 }
@@ -17625,7 +17640,7 @@ function updateGraphWithBlock(graph, block) {
                 throw new Error('typescript pacification FILL: ' + line);
             }
             const fill = _separateAtSeparateds(line, match[0].length);
-            const cloze = parseCloze(prompt, fill.atSeparatedValues[0]);
+            const cloze = parseCloze(prompt, fill.atSeparatedValues[0], 'regular');
             // add other valid entries
             cloze.clozes[0].push(...fill.atSeparatedValues.slice(1));
             // complete the graph node
@@ -17687,13 +17702,13 @@ function updateGraphWithBlock(graph, block) {
                 if (subPassive && subPrompt && subResponse) {
                     // if I can make A', B', C'
                     {
-                        const node = parseCloze(prompt, blank);
+                        const node = parseCloze(prompt, blank, 'noHint');
                         // no prompts, can answer with either prompt or response
                         node.clozes[0] = resp2.concat(prompt2);
                         clozeSeeNothing = addIdToCloze(node);
                     }
                     {
-                        let node = parseCloze(prompt, blank);
+                        let node = parseCloze(prompt, blank, 'promptHint');
                         // show cloze hint as the prompt
                         node.prompts = [prompt2];
                         // require answer to be responses (or prompt since IME)
@@ -17701,7 +17716,7 @@ function updateGraphWithBlock(graph, block) {
                         clozeSeePrompt = addIdToCloze(node);
                     }
                     {
-                        let node = parseCloze(prompt, blank, true);
+                        let node = parseCloze(prompt, blank, 'responsesHint');
                         node.prompts = [resp2.join(RESPONSE_SEP)];
                         node.clozes[0] = [prompt2];
                         clozeSeeResponse = addIdToCloze(node);
@@ -17709,7 +17724,7 @@ function updateGraphWithBlock(graph, block) {
                 }
                 else {
                     // Can only make A'
-                    let node = parseCloze(prompt, blank);
+                    let node = parseCloze(prompt, blank, 'noHint');
                     // no prompts, can answer with either prompt or response
                     node.clozes[0] = resp2.concat(prompt2);
                     clozeSeeNothing = addIdToCloze(node);
@@ -17743,7 +17758,7 @@ function updateGraphWithBlock(graph, block) {
                 const translation = PASSIVE.translation;
                 const lede = PASSIVE.lede;
                 const uniqueId = JSON.stringify({ lede, pairs });
-                const match = { uniqueId, kind, translation, lede, pairs, writing: false };
+                const match = { uniqueId, kind, translation, lede, pairs };
                 addNodeWithRaw(graph, block[0], match);
                 // reviewing any of the top cards (promt<->resp) is a passive review for this match card
                 // reviewing the match is passive review for the top-level passive/show-prompt
@@ -17779,7 +17794,7 @@ exports.textToGraph = textToGraph;
  * @param haystack Long string
  * @param needleMaybeContext
  */
-function parseCloze(haystack, needleMaybeContext, writing = false) {
+function parseCloze(haystack, needleMaybeContext, subkind) {
     let re = /\[([^\]]+)\]/;
     let bracketMatch = needleMaybeContext.match(re);
     if (bracketMatch) {
@@ -17802,7 +17817,7 @@ function parseCloze(haystack, needleMaybeContext, writing = false) {
         if (fullRe.exec(haystack)) {
             throw new Error('Insufficient cloze context');
         }
-        return { contexts: [left, null, right], clozes: [[cloze]], kind: QuizKind.Cloze, writing };
+        return { contexts: [left, null, right], clozes: [[cloze]], kind: QuizKind.Cloze, subkind };
     }
     let cloze = needleMaybeContext;
     let clozeRe = new RegExp(cloze, 'g');
@@ -17813,7 +17828,7 @@ function parseCloze(haystack, needleMaybeContext, writing = false) {
         if (clozeRe.exec(haystack)) {
             throw new Error('Cloze context required');
         }
-        return { contexts: [left, null, right], clozes: [[cloze]], kind: QuizKind.Cloze, writing };
+        return { contexts: [left, null, right], clozes: [[cloze]], kind: QuizKind.Cloze, subkind };
     }
     throw new Error('Cloze not found');
 }

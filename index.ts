@@ -1,7 +1,7 @@
 import {AbstractIterator} from 'abstract-leveldown';
-import {Quiz, QuizGraph, textToGraph} from 'curtiz-parse-markdown';
+import {Quiz, QuizGraph, QuizKind, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
-import {kata2hira, mapRight, partitionBy} from 'curtiz-utils';
+import {groupBy, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
@@ -15,51 +15,63 @@ const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu&{doc: Doc};
 
-type BlockState = {
-  learned: (boolean|undefined)[],
-};
-type BlockAction = {
-  type: 'learn',
-  payload: number,
-  learn: () => any,
-};
-
-function blockReducer(state: BlockState, action: BlockAction): BlockState {
-  if (action.type === 'learn') {
-    state.learned[action.payload] = true;
-    action.learn();
-    return {...state};
-  } else {
-    throw new Error('unknown action');
-  }
+function blockToUnlearnedKeys(block: string[], graph: GraphType): Map<number, Set<string>> {
+  const raws = block.map((line, lino) => block[0] + (lino ? '\n' + line : ''));
+  return new Map(raws.map((raw, idx) => {
+    const keys = Array.from(graph.raws.get(raw) || []).filter(key => !graph.ebisus.has(key));
+    return [idx, new Set(keys)];
+  }));
 }
-
+const subkind2type = {
+  passive: 'basic',
+  seePrompt: 'kread',
+  seeResponses: 'kwrite',
+  regular: 'basic',
+  noHint: 'basic',
+  promptHint: 'kread',
+  responsesHint: 'kwrite',
+};
+const subtypes = new Set(Object.values(subkind2type));
 function Block(props: {block: string[], graph: GraphType, learn: (keys: string[], graph: GraphType) => any}) {
   const raw = props.block.map((line, lino) => props.block[0] + (lino ? '\n' + line : ''));
-  const learned = (x: string) => isRawLearned(x, props.graph);
-  const learnable = (x: string) => isRawLearnable(x, props.graph);
-  const init: BlockState = {learned: raw.map(r => learnable(r) ? learned(r) : undefined)};
-  const [state, dispatch] = useReducer(blockReducer, init);
+  const [unlearned, setUnlearned] = useState(() => blockToUnlearnedKeys(props.block, props.graph));
   return ce(
       'ul',
       null,
       props.block.map((line, i) => {
-        const keys = Array.from(props.graph.raws.get(raw[i]) || []).filter(key => {
+        const keys = Array.from(props.graph.raws.get(raw[i]) || []);
+        const unlearnedKeys = keys.filter(key => !props.graph.ebisus.has(key));
+        const typeToKeys = groupBy(unlearnedKeys, key => {
           const hit = props.graph.nodes.get(key);
-          return hit ? !hit.writing : false;
+          return hit ? ('subkind' in hit ? subkind2type[hit.subkind] : 'basic') : 'basic';
         });
+        const buttons = Array.from(
+            subtypes,
+            type => {
+              const learnedKeys = typeToKeys.get(type) || [];
+              return ce(
+                  'button',
+                  {
+                    disabled: learnedKeys.length === 0,
+                    onClick: () => {
+                      const next = new Map(unlearned);
+                      const oldKeys = next.get(i);
+                      if (oldKeys && learnedKeys) {
+                        learnedKeys.forEach(k => oldKeys.delete(k));
+                        setUnlearned(next);
+                        props.learn(learnedKeys, props.graph);
+                      }
+                    }
+                  },
+                  `Learn ${learnedKeys.length} ${type}s`,
+              );
+            },
+        );
         return ce(
             'li',
             {key: i},
             line,
-            state.learned[i] === undefined
-                ? ''
-                : (state.learned[i] ? ' [learned!] '
-                                    : ce('button', {
-                                        onClick: () => dispatch(
-                                            {type: 'learn', payload: i, learn: () => props.learn(keys, props.graph)})
-                                      },
-                                         `Learn ${keys.length}`)),
+            ...(!props.graph.raws.has(raw[i]) ? ['!'] : buttons),
         );
       }),
   )
