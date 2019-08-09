@@ -6,7 +6,7 @@ import * as web from 'curtiz-web-db';
 import {Furigana, furiganaToString, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
-import React, {useEffect, useReducer, useState} from 'react';
+import React, {useEffect, useMemo, useReducer, useState} from 'react';
 import ReactDOM from 'react-dom';
 
 import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
@@ -104,7 +104,7 @@ const shuf: (v: any[]) => any[] = require('array-shuffle');
 function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summary: string) => any}) {
   const quiz = props.quiz;
   type GraderType = (s: string) => boolean;
-  const [{grader, prompt}, setGraderPrompt] = useState(() => {
+  const {grader, prompt} = useMemo(() => {
     let grader: GraderType;
     let prompt = '';
     if (quiz.kind === QuizKind.Cloze) {
@@ -128,7 +128,7 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
       throw new Error('unknown quiz type');
     }
     return {grader, prompt};
-  })
+  }, [quiz.uniqueId]);
 
   const [input, setInput] = useState('');
 

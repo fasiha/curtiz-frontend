@@ -270,7 +270,7 @@ function crossMatch(long, short) {
 var shuf = require('array-shuffle');
 function AQuiz(props) {
     var quiz = props.quiz;
-    var _a = __read(react_1.useState(function () {
+    var _a = react_1.useMemo(function () {
         var grader;
         var prompt = '';
         if (quiz.kind === curtiz_parse_markdown_1.QuizKind.Cloze) {
@@ -298,8 +298,8 @@ function AQuiz(props) {
             throw new Error('unknown quiz type');
         }
         return { grader: grader, prompt: prompt };
-    }), 2), _b = _a[0], grader = _b.grader, prompt = _b.prompt, setGraderPrompt = _a[1];
-    var _c = __read(react_1.useState(''), 2), input = _c[0], setInput = _c[1];
+    }, [quiz.uniqueId]), grader = _a.grader, prompt = _a.prompt;
+    var _b = __read(react_1.useState(''), 2), input = _b[0], setInput = _b[1];
     return ce('div', null, prompt, ce('input', { value: input, type: 'text', name: 'name', onChange: function (e) { return setInput(e.target.value); } }), ce('button', {
         onClick: function () {
             var grade = grader(input);
