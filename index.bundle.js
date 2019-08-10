@@ -288,11 +288,11 @@ function AQuiz(props) {
         }
         else if (quiz.kind === curtiz_parse_markdown_1.QuizKind.Match) {
             var idxs_1 = shuf(Array.from(Array(quiz.pairs.length), function (_, n) { return n; }));
-            var texts = quiz.pairs.map(function (o, i) { return "(" + i + ")" + jmdict_furigana_node_1.furiganaToString(o.text); });
+            var texts = quiz.pairs.map(function (o, i) { return "(" + (i + 1) + ")" + jmdict_furigana_node_1.furiganaToString(o.text); });
             var tls_1 = quiz.pairs.map(function (o) { return o.translation['en']; });
             var shuffledTls = idxs_1.map(function (i) { return tls_1[i] + '=?'; });
-            prompt = "Match " + texts.join(' — ') + ". " + shuffledTls.join(' — ');
-            grader = function (s) { return s === idxs_1.join(''); };
+            prompt = "Match " + texts.join('。 ') + "\u3002 Choices: \u30FB" + shuffledTls.join(' ・');
+            grader = function (s) { return s === idxs_1.map(function (n) { return n + 1; }).join(''); };
         }
         else {
             throw new Error('unknown quiz type');
@@ -301,14 +301,7 @@ function AQuiz(props) {
     }, [quiz.uniqueId]), grader = _a.grader, prompt = _a.prompt;
     var _b = __read(react_1.useState(''), 2), input = _b[0], setInput = _b[1];
     var _c = useFocus(), focus = _c.focus, ref = _c.ref;
-    return ce('div', null, prompt, ce('input', {
-        value: input,
-        type: 'text',
-        name: 'name',
-        onChange: function (e) { return setInput(e.target.value); },
-        autoFocus: true,
-        ref: ref,
-    }), ce('button', {
+    return ce('div', null, FuriganaComponent({ furiganaString: prompt }), ce('input', { value: input, type: 'text', name: 'name', onChange: function (e) { return setInput(e.target.value); }, autoFocus: true, ref: ref }), ce('button', {
         onClick: function () {
             var grade = grader(input);
             var summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +

@@ -119,11 +119,11 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
       grader = (s: string) => crossMatch(quiz.responses.concat(quiz.prompt), [s, kata2hira(s)]);
     } else if (quiz.kind === QuizKind.Match) {
       const idxs: number[] = shuf(Array.from(Array(quiz.pairs.length), (_, n) => n));
-      const texts = quiz.pairs.map((o, i) => `(${i})` + furiganaToString(o.text));
+      const texts = quiz.pairs.map((o, i) => `(${i + 1})` + furiganaToString(o.text));
       const tls = quiz.pairs.map(o => o.translation['en']);
       const shuffledTls = idxs.map(i => tls[i] + '=?');
-      prompt = `Match ${texts.join(' — ')}. ${shuffledTls.join(' — ')}`;
-      grader = (s: string) => s === idxs.join('');
+      prompt = `Match ${texts.join('。 ')}。 Choices: ・${shuffledTls.join(' ・')}`;
+      grader = (s: string) => s === idxs.map(n => n + 1).join('');
     } else {
       throw new Error('unknown quiz type');
     }
@@ -135,7 +135,7 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
   return ce(
       'div',
       null,
-      prompt,
+      FuriganaComponent({furiganaString: prompt}),
       ce('input',
          {value: input, type: 'text', name: 'name', onChange: e => setInput(e.target.value), autoFocus: true, ref}),
       ce('button', {
