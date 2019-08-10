@@ -132,27 +132,26 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
 
   const [input, setInput] = useState('');
   const {focus, ref} = useFocus();
-  return ce('div', null, prompt, ce('input', {
-              value: input,
-              type: 'text',
-              name: 'name',
-              onChange: e => setInput(e.target.value),
-              autoFocus: true,
-              ref,
-            }),
-            ce('button', {
-              onClick: () => {
-                const grade = grader(input);
-                const summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
-                                `「${input}」for ${prompt}` + (quiz.lede ? ` ・ ${furiganaToString(quiz.lede)}` : '') +
-                                ` @ ${(new Date()).toISOString()}`;
-                props.update(grade, quiz.uniqueId, summary);
-                setInput('');
-                focus();
-              },
-              disabled: !input.length,
-            },
-               'Submit'));
+  return ce(
+      'div',
+      null,
+      prompt,
+      ce('input',
+         {value: input, type: 'text', name: 'name', onChange: e => setInput(e.target.value), autoFocus: true, ref}),
+      ce('button', {
+        onClick: () => {
+          const grade = grader(input);
+          const summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
+                          `「${input}」for ${prompt}` + (quiz.lede ? ` ・ ${furiganaToString(quiz.lede)}` : '') +
+                          ` @ ${(new Date()).toISOString()}`;
+          props.update(grade, quiz.uniqueId, summary);
+          setInput('');
+          focus();
+        },
+        disabled: !input.length,
+      },
+         'Submit'),
+  );
 }
 function useFocus() {
   // Via https://stackoverflow.com/a/54159564/500207
