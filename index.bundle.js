@@ -195,7 +195,7 @@ function FuriganaComponent(props) {
     var e_1, _a;
     var arr = [];
     try {
-        for (var _b = __values(props.furigana), _c = _b.next(); !_c.done; _c = _b.next()) {
+        for (var _b = __values((props.furigana || jmdict_furigana_node_1.stringToFurigana(props.furiganaString || ''))), _c = _b.next(); !_c.done; _c = _b.next()) {
             var f = _c.value;
             arr.push(typeof f === 'string' ? f : ce('ruby', null, f.ruby, ce('rt', null, f.rt)));
         }
@@ -300,16 +300,34 @@ function AQuiz(props) {
         return { grader: grader, prompt: prompt };
     }, [quiz.uniqueId]), grader = _a.grader, prompt = _a.prompt;
     var _b = __read(react_1.useState(''), 2), input = _b[0], setInput = _b[1];
-    return ce('div', null, prompt, ce('input', { value: input, type: 'text', name: 'name', onChange: function (e) { return setInput(e.target.value); } }), ce('button', {
+    var _c = useFocus(), focus = _c.focus, ref = _c.ref;
+    return ce('div', null, prompt, ce('input', {
+        value: input,
+        type: 'text',
+        name: 'name',
+        onChange: function (e) { return setInput(e.target.value); },
+        autoFocus: true,
+        ref: ref,
+    }), ce('button', {
         onClick: function () {
             var grade = grader(input);
             var summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
-                ("\u300C" + input + "\u300Dfor " + prompt) + (quiz.lede ? " " + jmdict_furigana_node_1.furiganaToString(quiz.lede) : '');
+                ("\u300C" + input + "\u300Dfor " + prompt) + (quiz.lede ? " \u30FB " + jmdict_furigana_node_1.furiganaToString(quiz.lede) : '') +
+                (" @ " + (new Date()).toISOString());
             props.update(grade, quiz.uniqueId, summary);
             setInput('');
-        }
+            focus();
+        },
+        disabled: !input.length,
     }, 'Submit'));
 }
+function useFocus() {
+    // Via https://stackoverflow.com/a/54159564/500207
+    var ref = react_1.useRef(null);
+    var focus = function () { ref.current && ref.current.focus(); };
+    return { focus: focus, ref: ref };
+}
+;
 function Quizzer(props) {
     var _a = __read(react_1.useState(undefined), 2), quiz = _a[0], setQuiz = _a[1];
     if (quiz === undefined) {
@@ -333,7 +351,7 @@ function Quizzer(props) {
             setPastResults(pastResults.concat(summary));
         },
         quiz: quiz
-    }), ce('ul', null, curtiz_utils_1.mapRight(pastResults, function (s) { return ce('li', { key: s }, s); })));
+    }), ce('ul', null, curtiz_utils_1.mapRight(pastResults, function (s) { return ce('li', { key: s }, FuriganaComponent({ furiganaString: s })); })));
 }
 function Main() {
     var _a = __read(react_1.useState(undefined), 2), db = _a[0], setDb = _a[1];
@@ -17663,6 +17681,17 @@ function updateGraphWithBlock(graph, block) {
         }
         // might not get the opportunity to link these later
         link(graph, SENTENCEMAT, allCards.concat(Array(6).fill(undefined)));
+        const furiganaLookup = [];
+        if (furigana) {
+            for (const f of furigana) {
+                if (typeof f === 'string') {
+                    furiganaLookup.push(...f.split(''));
+                }
+                else {
+                    furiganaLookup.push(f.rt);
+                }
+            }
+        }
         const fills = bullets.filter(line => fillRe.test(line)).map(line => {
             const match = line.match(fillRe);
             if (!match) {
@@ -17694,6 +17723,7 @@ function updateGraphWithBlock(graph, block) {
             }
             const flash = _separateAtSeparateds(line, match[0].length);
             const [prompt2, ...resp2] = flash.atSeparatedValues;
+            // These will be morphemes lemma/readings
             const { PASSIVE: subPassive, SEEPROMPT: subPrompt, SEERESPONSE: subResponse } = promptResponsesToCards(prompt2, resp2);
             const allFlashs = [subPassive, subPrompt, subResponse];
             const topFlashs = allFlashs.filter(x => !!x);
@@ -17728,12 +17758,24 @@ function updateGraphWithBlock(graph, block) {
             let clozeSeeResponse;
             if ('@omit' in flash.adverbs || prompt.includes(prompt2)) {
                 const blank = flash.adverbs['@omit'] || prompt2;
+                // other acceptable alternatives to blank
+                const alsoOk = [];
+                if (furigana) {
+                    const start = prompt.indexOf(blank);
+                    if (start >= 0) {
+                        const reading = Array.from(Array(blank.length), (_, i) => furiganaLookup[i + start]).join('');
+                        alsoOk.push(reading);
+                    }
+                }
                 if (subPassive && subPrompt && subResponse) {
                     // if I can make A', B', C'
                     {
                         const node = parseCloze(prompt, blank, 'noHint');
                         // no prompts, can answer with either prompt or response
-                        node.clozes[0] = resp2.concat(prompt2);
+                        if (node.clozes[0][0] === prompt2 || resp2.includes(node.clozes[0][0]) || resp2.includes(alsoOk[0])) {
+                            alsoOk.push(...resp2.concat(prompt2));
+                        }
+                        node.clozes[0] = unique(node.clozes[0].concat(alsoOk));
                         clozeSeeNothing = addIdToCloze(node);
                     }
                     {
@@ -17755,7 +17797,10 @@ function updateGraphWithBlock(graph, block) {
                     // Can only make A'
                     let node = parseCloze(prompt, blank, 'noHint');
                     // no prompts, can answer with either prompt or response
-                    node.clozes[0] = resp2.concat(prompt2);
+                    if (node.clozes[0][0] === prompt2 || resp2.includes(node.clozes[0][0]) || resp2.includes(alsoOk[0])) {
+                        alsoOk.push(...resp2.concat(prompt2));
+                    }
+                    node.clozes[0] = unique(node.clozes[0].concat(alsoOk));
                     clozeSeeNothing = addIdToCloze(node);
                 }
             }
@@ -17771,7 +17816,7 @@ function updateGraphWithBlock(graph, block) {
                     }
                 }
             });
-            link(graph, SENTENCEMAT, cards.concat(topFlashs).concat(allClozes));
+            link(graph, SENTENCEMAT, allCards.concat(allFlashs).concat(allClozes));
             return [allFlashs, allClozes];
         });
         // all sub-bullets parsed. Now make matching
@@ -17861,6 +17906,7 @@ function parseCloze(haystack, needleMaybeContext, subkind) {
     }
     throw new Error('Cloze not found');
 }
+function unique(arr) { return Array.from(new Set(arr)); }
 if (module === require.main) {
     let s = `# @ 私 @ わたし @ わたくし @ あたし @t-en I @t-fr je @t-de Ich`;
     let graph = textToGraph(s);

@@ -6,7 +6,7 @@ import * as web from 'curtiz-web-db';
 import {Furigana, furiganaToString, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
-import React, {useEffect, useMemo, useReducer, useState} from 'react';
+import React, {useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import ReactDOM from 'react-dom';
 
 import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
@@ -16,9 +16,9 @@ const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu&{doc: Doc};
 
-function FuriganaComponent(props: {furigana: Furigana[]}) {
+function FuriganaComponent(props: {furigana?: Furigana[], furiganaString?: string}) {
   const arr = [];
-  for (const f of props.furigana) {
+  for (const f of (props.furigana || stringToFurigana(props.furiganaString || ''))) {
     arr.push(typeof f === 'string' ? f : ce('ruby', null, f.ruby, ce('rt', null, f.rt)));
   }
   return ce('span', {}, ...arr);
@@ -131,20 +131,35 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
   }, [quiz.uniqueId]);
 
   const [input, setInput] = useState('');
-
-  return ce('div', null, prompt,
-            ce('input', {value: input, type: 'text', name: 'name', onChange: e => setInput(e.target.value)}),
+  const {focus, ref} = useFocus();
+  return ce('div', null, prompt, ce('input', {
+              value: input,
+              type: 'text',
+              name: 'name',
+              onChange: e => setInput(e.target.value),
+              autoFocus: true,
+              ref,
+            }),
             ce('button', {
               onClick: () => {
                 const grade = grader(input);
                 const summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
-                                `「${input}」for ${prompt}` + (quiz.lede ? ` ${furiganaToString(quiz.lede)}` : '');
+                                `「${input}」for ${prompt}` + (quiz.lede ? ` ・ ${furiganaToString(quiz.lede)}` : '') +
+                                ` @ ${(new Date()).toISOString()}`;
                 props.update(grade, quiz.uniqueId, summary);
                 setInput('');
-              }
+                focus();
+              },
+              disabled: !input.length,
             },
                'Submit'));
 }
+function useFocus() {
+  // Via https://stackoverflow.com/a/54159564/500207
+  const ref = useRef(null);
+  const focus = () => { ref.current && (ref.current as any).focus() };
+  return {focus, ref};
+};
 
 function Quizzer(props: {graph: GraphType, update: (result: boolean, key: string) => any}) {
   const [quiz, setQuiz] = useState(undefined as Quiz | undefined);
@@ -167,7 +182,7 @@ function Quizzer(props: {graph: GraphType, update: (result: boolean, key: string
               },
               quiz
             }),
-            ce('ul', null, mapRight(pastResults, s => ce('li', {key: s}, s))));
+            ce('ul', null, mapRight(pastResults, s => ce('li', {key: s}, FuriganaComponent({furiganaString: s})))));
 }
 
 type AppState = 'edit'|'learn'|'quiz';
