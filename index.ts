@@ -136,21 +136,28 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
       'div',
       null,
       FuriganaComponent({furiganaString: prompt}),
-      ce('input',
-         {value: input, type: 'text', name: 'name', onChange: e => setInput(e.target.value), autoFocus: true, ref}),
-      ce('button', {
-        onClick: () => {
-          const grade = grader(input);
-          const summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
-                          `「${input}」for ${prompt}` + (quiz.lede ? ` ・ ${furiganaToString(quiz.lede)}` : '') +
-                          ` @ ${(new Date()).toISOString()}`;
-          props.update(grade, quiz.uniqueId, summary);
-          setInput('');
-          focus();
-        },
-        disabled: !input.length,
-      },
-         'Submit'),
+      ce(
+          'form',
+          {
+            onSubmit: (e: any) => {
+              e.preventDefault();
+              const grade = grader(input);
+              const summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
+                              `「${input}」for ${prompt}` + (quiz.lede ? ` ・ ${furiganaToString(quiz.lede)}` : '') +
+                              ` @ ${(new Date()).toISOString()}`;
+              props.update(grade, quiz.uniqueId, summary);
+              setInput('');
+              focus();
+            },
+          },
+          ce('input',
+             {value: input, type: 'text', name: 'name', onChange: e => setInput(e.target.value), autoFocus: true, ref}),
+          ce('button', {
+            disabled: !input.length,
+            type: 'submit',
+          },
+             'Submit'),
+          ),
   );
 }
 function useFocus() {

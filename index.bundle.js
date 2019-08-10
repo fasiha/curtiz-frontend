@@ -301,8 +301,9 @@ function AQuiz(props) {
     }, [quiz.uniqueId]), grader = _a.grader, prompt = _a.prompt;
     var _b = __read(react_1.useState(''), 2), input = _b[0], setInput = _b[1];
     var _c = useFocus(), focus = _c.focus, ref = _c.ref;
-    return ce('div', null, FuriganaComponent({ furiganaString: prompt }), ce('input', { value: input, type: 'text', name: 'name', onChange: function (e) { return setInput(e.target.value); }, autoFocus: true, ref: ref }), ce('button', {
-        onClick: function () {
+    return ce('div', null, FuriganaComponent({ furiganaString: prompt }), ce('form', {
+        onSubmit: function (e) {
+            e.preventDefault();
             var grade = grader(input);
             var summary = (grade ? '🙆‍♂️🙆‍♀️! ' : '🙅‍♀️🙅‍♂️. ') +
                 ("\u300C" + input + "\u300Dfor " + prompt) + (quiz.lede ? " \u30FB " + jmdict_furigana_node_1.furiganaToString(quiz.lede) : '') +
@@ -311,8 +312,10 @@ function AQuiz(props) {
             setInput('');
             focus();
         },
+    }, ce('input', { value: input, type: 'text', name: 'name', onChange: function (e) { return setInput(e.target.value); }, autoFocus: true, ref: ref }), ce('button', {
         disabled: !input.length,
-    }, 'Submit'));
+        type: 'submit',
+    }, 'Submit')));
 }
 function useFocus() {
     // Via https://stackoverflow.com/a/54159564/500207
