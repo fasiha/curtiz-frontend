@@ -39,9 +39,10 @@ const subkind2type = {
   noHint: 'basic',
   promptHint: 'kread',
   responsesHint: 'kwrite',
-};
+} as const ;
 const subtypes = new Set(Object.values(subkind2type));
-function Block(props: {block: string[], graph: GraphType, learn: (keys: string[], graph: GraphType) => any}) {
+function Block(
+    props: {block: string[], graph: GraphType, learn: (keys: string[]) => any, unlearn: (keys: string[]) => any}) {
   const raw = props.block.map((line, lino) => props.block[0] + (lino ? '\n' + line : ''));
   const [unlearned, setUnlearned] = useState(() => blockToUnlearnedKeys(props.block, props.graph));
   return ce(
@@ -50,6 +51,7 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
       props.block.map((line, i) => {
         const keys = Array.from(props.graph.raws.get(raw[i]) || []); // FIXME repeating work? cf. `unlearned`
         const unlearnedKeys = keys.filter(key => !props.graph.ebisus.has(key));
+        const numLearned = keys.length - unlearnedKeys.length;
         const typeToKeys = groupBy(unlearnedKeys, key => {
           const hit = props.graph.nodes.get(key);
           return hit ? ('subkind' in hit ? subkind2type[hit.subkind] : 'basic') : 'basic';
@@ -68,7 +70,7 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
                       if (oldKeys && learnedKeys) {
                         learnedKeys.forEach(k => oldKeys.delete(k));
                         setUnlearned(next);
-                        props.learn(learnedKeys, props.graph);
+                        props.learn(learnedKeys);
                       }
                     }
                   },
@@ -76,6 +78,24 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
               );
             },
         );
+        if (numLearned > 0) {
+          const n = keys.length - unlearnedKeys.length;
+          const plural = 'card' + (n > 1 ? 's' : '');
+          const unlearn = ce(
+              'button',
+              {
+                disabled: false,
+                onClick: () => {
+                  props.unlearn(keys);
+                  const next = new Map(unlearned);
+                  next.set(i, new Set(keys));
+                  setUnlearned(next);
+                }
+              },
+              `Unlearn ${n} ${plural}`,
+          );
+          buttons.push(unlearn);
+        }
         return ce(
             'li',
             {key: i},
@@ -86,12 +106,9 @@ function Block(props: {block: string[], graph: GraphType, learn: (keys: string[]
   )
 }
 
-function Learn(props: {graph: GraphType, learn: (keys: string[]) => any}) {
+function Learn(props: {graph: GraphType, learn: (keys: string[]) => any, unlearn: (keys: string[]) => any}) {
   const blocks = markdownToBlocks(props.graph.doc.content);
-  return ce(
-      'div', null,
-      blocks.map((block, i) =>
-                     ce(Block, {key: props.graph.doc.title + '/' + i, block, graph: props.graph, learn: props.learn})));
+  return ce('div', null, blocks.map((block, i) => ce(Block, {...props, key: props.graph.doc.title + '/' + i, block})));
   // Without `key` above, React doesn't properly handle the reducer.
 }
 
@@ -271,7 +288,12 @@ function Main() {
 
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const graph = graphsMap.get(selectedTitle || '');
-  const learn = graph ? ce(Learn, {graph, learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0}) : '';
+  const learn = graph ? ce(Learn, {
+    graph,
+    learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0,
+    unlearn: (keys: string[]) => db ? web.unlearnQuizzes(db, keys, graph) : 0,
+  })
+                      : '';
   const quiz = (graph) ? ce(Quizzer, {
     key: selectedTitle,
     graph,
