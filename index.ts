@@ -1,15 +1,16 @@
-import {AbstractIterator} from 'abstract-leveldown';
+import {AbstractBatch, AbstractIterator, AbstractIteratorOptions} from 'abstract-leveldown';
 import {Quiz, QuizGraph, QuizKind, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner'
 import {flatMapIterator, groupBy, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
+import {Gatty, setup, sync} from 'isomorphic-gatty';
 import {Furigana, furiganaToString, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
 import React, {useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import ReactDOM from 'react-dom';
 
-import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
+import {Doc, DOCS_PREFIX, EventDoc, loadDocs, saveDoc} from './docs';
 import {Edit} from './Edit';
 
 const ce = React.createElement;
@@ -232,17 +233,65 @@ function Quizzer(props: {graph: GraphType, update: (result: boolean, key: string
             ce('ul', null, mapRight(pastResults, s => ce('li', {key: s}, FuriganaComponent({furiganaString: s})))));
 }
 
-type AppState = 'edit'|'learn'|'quiz';
+type AppState = 'edit'|'learn'|'quiz'|'login';
 type GraphsMap = Map<string, GraphType>;
-
+type CurtizEvent = web.EventLearn|web.EventUnlearn|web.EventUpdate|EventDoc;
 function Main() {
   const [db, setDb] = useState(undefined as Db | undefined);
   const defaultGraphsMap: GraphsMap = new Map();
   const [graphsMap, setGraphsMap] = useState(defaultGraphsMap);
+  const [gatty, setGatty] = useState(undefined as Gatty | undefined)
+  const [lastSharedUid, setLastSharedUid] = useState('' as string);
+
+  async function syncer() {
+    if (gatty && db) {
+      const opts:
+          AbstractIteratorOptions<string> = {gt: web.EVENT_PREFIX + lastSharedUid, lt: web.EVENT_PREFIX + '\ufe0f'};
+      const res = await web.summarizeDb(db, opts);
+      const {newEvents, newSharedUid} = await sync(gatty, lastSharedUid, res.map(o => o.key), res.map(o => o.value));
+      if (newSharedUid !== lastSharedUid) {
+        const events: CurtizEvent[] = newEvents.map(s => JSON.parse(s));
+        const batch: AbstractBatch[] = [{type: 'put', key: 'lastSharedUid', value: newSharedUid}];
+        {
+          const dbKeyToBatch: Map<string, AbstractBatch> = new Map([]);
+          for (const e of events) {
+            // event should be committed to local db as is
+            batch.push({type: 'put', key: e.uid, value: e});
+            // local db should update the things the events talk about too!
+            if (e.action === 'learn' || e.action === 'update') {
+              const key = web.EBISU_PREFIX + e.key;
+              dbKeyToBatch.set(key, {type: 'put', key, value: e.ebisu});
+            } else if (e.action === 'doc') {
+              const key = DOCS_PREFIX + e.doc.title;
+              dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
+            } else if (e.action === 'unlearn') {
+              const key = web.EBISU_PREFIX + e.key;
+              dbKeyToBatch.set(key, {type: 'del', key});
+            } else {
+              throw new Error('unhandled event action');
+            }
+          }
+          for (const value of dbKeyToBatch.values()) { batch.push(value); }
+        }
+        await db.batch(batch);
+        setLastSharedUid(newSharedUid);
+      }
+    }
+  }
 
   async function loader() {
     const newdb = db || web.setup('testing');
-    setDb(newdb);
+    if (db !== newdb) { setDb(newdb); }
+
+    if (newdb) {
+      const foo = await web.summarizeDb(newdb) as {key: string, value: any}[];
+      console.log(foo);
+
+      try {
+        const fromDb = await newdb.get('lastSharedUid');
+        if (lastSharedUid !== fromDb) { setLastSharedUid(fromDb); }
+      } catch (e) { await newdb.put('lastSharedUid', lastSharedUid); }
+    }
 
     const docs = await loadDocs(newdb, DOCS_PREFIX);
     { // add new empty doc for editing
@@ -301,8 +350,14 @@ function Main() {
     update: (result: boolean, key: string) => web.updateQuiz(db as Db, result, key, graph)
   })
                        : '';
+  const login = ce(Login, {
+    tellparent: async (url, username, token) => {
+      const newgatty = gatty || await setup({corsProxy: 'https://cors.isomorphic-git.org', username, token}, url);
+      if (gatty !== newgatty) { setGatty(newgatty); }
+    }
+  });
   const body = state === 'edit' ? ce(Edit, {docs: Array.from(graphsMap.values(), graph => graph.doc), updateDoc})
-                                : state === 'quiz' ? quiz : learn;
+                                : state === 'quiz' ? quiz : state === 'learn' ? learn : login;
 
   const setStateDebounce = (x: AppState) => {
     if (x !== state) {
@@ -316,7 +371,58 @@ function Main() {
       ce('button', {onClick: () => setStateDebounce('edit')}, 'Edit'),
       ce('button', {onClick: () => setStateDebounce('learn')}, 'Learn'),
       ce('button', {onClick: () => setStateDebounce('quiz')}, 'Quiz'),
+      ce('button', {onClick: () => setStateDebounce('login')}, 'Login'),
       ce('div', null, listOfDocs, body),
+  );
+}
+
+function Login(props: {tellparent: (a: string, b: string, c: string) => void}) {
+  const [url, setURL] = useState('');
+  const [username, setUsername] = useState('');
+  const [token, setToken] = useState('');
+  return ce(
+      'div',
+      null,
+      ce(
+          'form',
+          {
+            onSubmit: (e: any) => {
+              e.preventDefault();
+              props.tellparent(url, username, token);
+            }
+          },
+          ce(
+              'div',
+              {className: 'input-group'},
+              ce('label', null, 'URL'),
+              ce('input', {
+                type: 'text',
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                value: url,
+                onChange: e => setURL(e.target.value)
+              }),
+              ),
+          ce(
+              'div',
+              {className: 'input-group'},
+              ce('label', null, 'Username'),
+              ce('input', {
+                type: 'text',
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                value: username,
+                onChange: e => setUsername(e.target.value)
+              }),
+              ),
+          ce(
+              'div',
+              {className: 'input-group'},
+              ce('label', null, 'Token'),
+              ce('input', {type: 'password', value: token, onChange: e => setToken(e.target.value)}),
+              ),
+          ce('input', {type: 'submit', value: 'Login'}),
+          ),
   );
 }
 

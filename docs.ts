@@ -1,4 +1,5 @@
 import {AbstractIterator} from 'abstract-leveldown';
+import {EventBase} from 'curtiz-web-db';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
 
@@ -16,7 +17,7 @@ function rehydrateDoc(nominalDoc: Doc) {
   return nominalDoc;
 }
 
-export const DOCS_PREFIX: string = 'docs/';
+export const DOCS_PREFIX = 'docs/';
 export function loadDocs(db: Db, prefix: string): Promise<Doc[]> {
   let docs: Doc[] = [];
   return new Promise((resolve, reject) => {
@@ -26,11 +27,15 @@ export function loadDocs(db: Db, prefix: string): Promise<Doc[]> {
         .on('error', err => reject(err));
   });
 }
-
+export interface EventDoc extends EventBase {
+  doc: Doc;
+  action: 'doc';
+}
 export function saveDoc(db: Db, prefix: string, eventPrefix: string, doc: Doc): Promise<void> {
   const uid = doc.title + '-' + Math.random().toString(36).slice(2);
+  const eventValue: EventDoc = {doc, uid, action: 'doc', date: new Date()};
   return db.batch([
     {type: 'put', key: prefix + doc.title, value: doc},
-    {type: 'put', key: eventPrefix + uid, value: {...doc, uid}},
+    {type: 'put', key: eventPrefix + uid, value: eventValue},
   ]);
 }

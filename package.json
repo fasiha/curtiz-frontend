@@ -27,6 +27,7 @@
     "curtiz-quiz-planner": "git+https://github.com/fasiha/curtiz-quiz-planner.git",
     "curtiz-utils": "git+https://github.com/fasiha/curtiz-utils.git",
     "curtiz-web-db": "git+https://github.com/fasiha/curtiz-web-db.git",
+    "isomorphic-gatty": "^1.0.0",
     "react": "^16.8.6",
     "react-dom": "^16.8.6"
   }
