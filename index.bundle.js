@@ -263,8 +263,8 @@ function Block(props) {
     }));
 }
 function Learn(props) {
-    var blocks = markdownToBlocks(props.graph.doc.content);
-    return ce('div', null, blocks.map(function (block, i) { return ce(Block, __assign({}, props, { key: props.graph.doc.title + '/' + i, block: block })); }));
+    var blocks = markdownToBlocks(props.doc.content);
+    return ce('div', null, blocks.map(function (block, i) { return ce(Block, __assign({}, props, { key: props.doc.title + '/' + i, block: block })); }));
     // Without `key` above, React doesn't properly handle the reducer.
 }
 function wrap(s) { return "_(" + s + ")_"; }
@@ -381,10 +381,11 @@ function Quizzer(props) {
 function Main() {
     var _this = this;
     var _a = __read(react_1.useState(undefined), 2), db = _a[0], setDb = _a[1];
-    var defaultGraphsMap = new Map();
-    var _b = __read(react_1.useState(defaultGraphsMap), 2), graphsMap = _b[0], setGraphsMap = _b[1];
-    var _c = __read(react_1.useState(undefined), 2), gatty = _c[0], setGatty = _c[1];
-    var _d = __read(react_1.useState(''), 2), lastSharedUid = _d[0], setLastSharedUid = _d[1];
+    var defaultGraph = undefined;
+    var _b = __read(react_1.useState(defaultGraph), 2), graph = _b[0], setGraph = _b[1];
+    var _c = __read(react_1.useState([]), 2), docs = _c[0], setDocs = _c[1];
+    var _d = __read(react_1.useState(undefined), 2), gatty = _d[0], setGatty = _d[1];
+    var _e = __read(react_1.useState(''), 2), lastSharedUid = _e[0], setLastSharedUid = _e[1];
     function syncer() {
         return __awaiter(this, void 0, void 0, function () {
             var opts, res, _a, newEvents, newSharedUid, events, batch, dbKeyToBatch, events_1, events_1_1, e, key, key, key, _b, _c, value;
@@ -461,10 +462,10 @@ function Main() {
     }
     function loader() {
         return __awaiter(this, void 0, void 0, function () {
-            var newdb, foo, fromDb, e_4, docs, date, newName, graphs, docs_2, docs_2_1, doc, _a, _b, _c, _d, e_5, e_6_1;
-            var e_6, _e;
-            return __generator(this, function (_f) {
-                switch (_f.label) {
+            var newdb, foo, fromDb, e_4, docs, date, newName, graph, docs_2, docs_2_1, doc, e_5, e_6_1;
+            var e_6, _a;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
                     case 0:
                         newdb = db || web.setup('testing');
                         if (db !== newdb) {
@@ -473,72 +474,77 @@ function Main() {
                         if (!newdb) return [3 /*break*/, 6];
                         return [4 /*yield*/, web.summarizeDb(newdb)];
                     case 1:
-                        foo = _f.sent();
+                        foo = _b.sent();
                         console.log(foo);
-                        _f.label = 2;
+                        _b.label = 2;
                     case 2:
-                        _f.trys.push([2, 4, , 6]);
+                        _b.trys.push([2, 4, , 6]);
                         return [4 /*yield*/, newdb.get('lastSharedUid')];
                     case 3:
-                        fromDb = _f.sent();
+                        fromDb = _b.sent();
                         if (lastSharedUid !== fromDb) {
                             setLastSharedUid(fromDb);
                         }
                         return [3 /*break*/, 6];
                     case 4:
-                        e_4 = _f.sent();
+                        e_4 = _b.sent();
                         return [4 /*yield*/, newdb.put('lastSharedUid', lastSharedUid)];
                     case 5:
-                        _f.sent();
+                        _b.sent();
                         return [3 /*break*/, 6];
                     case 6: return [4 /*yield*/, docs_1.loadDocs(newdb, docs_1.DOCS_PREFIX)];
                     case 7:
-                        docs = _f.sent();
+                        docs = _b.sent();
                         { // add new empty doc for editing
                             date = new Date();
                             newName = 'New ' + date.toISOString();
                             docs.push({ title: newName, content: '(empty)', source: undefined, modified: date });
                         }
-                        graphs = new Map();
-                        _f.label = 8;
+                        setDocs(docs);
+                        graph = undefined;
+                        _b.label = 8;
                     case 8:
-                        _f.trys.push([8, 15, 16, 17]);
+                        _b.trys.push([8, 17, 18, 19]);
                         docs_2 = __values(docs), docs_2_1 = docs_2.next();
-                        _f.label = 9;
+                        _b.label = 9;
                     case 9:
-                        if (!!docs_2_1.done) return [3 /*break*/, 14];
+                        if (!!docs_2_1.done) return [3 /*break*/, 16];
                         doc = docs_2_1.value;
-                        _f.label = 10;
+                        _b.label = 10;
                     case 10:
-                        _f.trys.push([10, 12, , 13]);
-                        _b = (_a = graphs).set;
-                        _c = [doc.title];
-                        _d = [{}];
+                        _b.trys.push([10, 14, , 15]);
+                        if (!!graph) return [3 /*break*/, 12];
                         return [4 /*yield*/, web.initialize(newdb, doc.content)];
                     case 11:
-                        _b.apply(_a, _c.concat([__assign.apply(void 0, _d.concat([_f.sent(), { doc: doc }]))]));
+                        graph = _b.sent();
                         return [3 /*break*/, 13];
                     case 12:
-                        e_5 = _f.sent();
+                        curtiz_parse_markdown_1.textToGraph(doc.content, graph);
+                        _b.label = 13;
+                    case 13: return [3 /*break*/, 15];
+                    case 14:
+                        e_5 = _b.sent();
                         alert('Error caught. See JS Console');
                         console.error('Error analyzing text. Skipping', e_5);
-                        return [3 /*break*/, 13];
-                    case 13:
+                        return [3 /*break*/, 15];
+                    case 15:
                         docs_2_1 = docs_2.next();
                         return [3 /*break*/, 9];
-                    case 14: return [3 /*break*/, 17];
-                    case 15:
-                        e_6_1 = _f.sent();
+                    case 16: return [3 /*break*/, 19];
+                    case 17:
+                        e_6_1 = _b.sent();
                         e_6 = { error: e_6_1 };
-                        return [3 /*break*/, 17];
-                    case 16:
+                        return [3 /*break*/, 19];
+                    case 18:
                         try {
-                            if (docs_2_1 && !docs_2_1.done && (_e = docs_2.return)) _e.call(docs_2);
+                            if (docs_2_1 && !docs_2_1.done && (_a = docs_2.return)) _a.call(docs_2);
                         }
                         finally { if (e_6) throw e_6.error; }
                         return [7 /*endfinally*/];
-                    case 17:
-                        setGraphsMap(graphs);
+                    case 19:
+                        if (graph) {
+                            setGraph(graph);
+                        }
                         return [2 /*return*/];
                 }
             });
@@ -547,46 +553,36 @@ function Main() {
     react_1.useEffect(function () { loader(); }, [0]);
     function updateDoc(doc) {
         return __awaiter(this, void 0, void 0, function () {
-            var _a, _b, _c, _d, e_7;
-            return __generator(this, function (_e) {
-                switch (_e.label) {
-                    case 0:
-                        if (!db) {
-                            throw new Error('cannot update doc when db undefined');
-                        }
-                        docs_1.saveDoc(db, docs_1.DOCS_PREFIX, web.EVENT_PREFIX, doc);
-                        _e.label = 1;
-                    case 1:
-                        _e.trys.push([1, 3, , 4]);
-                        _b = (_a = graphsMap).set;
-                        _c = [doc.title];
-                        _d = [{}];
-                        return [4 /*yield*/, web.initialize(db, doc.content)];
-                    case 2:
-                        _b.apply(_a, _c.concat([__assign.apply(void 0, _d.concat([_e.sent(), { doc: doc }]))]));
-                        return [3 /*break*/, 4];
-                    case 3:
-                        e_7 = _e.sent();
-                        alert('Error caught. See JS Console');
-                        console.error('Error analyzing text. Skipping', e_7);
-                        return [3 /*break*/, 4];
-                    case 4: return [2 /*return*/];
+            return __generator(this, function (_a) {
+                if (!db) {
+                    throw new Error('cannot update doc when db undefined');
                 }
+                docs_1.saveDoc(db, docs_1.DOCS_PREFIX, web.EVENT_PREFIX, doc);
+                try {
+                    curtiz_parse_markdown_1.textToGraph(doc.content, graph);
+                    setGraph(graph);
+                }
+                catch (e) {
+                    alert('Error caught. See JS Console');
+                    console.error('Error analyzing text. Skipping', e);
+                }
+                return [2 /*return*/];
             });
         });
     }
     var defaultState = 'edit';
-    var _e = __read(react_1.useState(defaultState), 2), state = _e[0], setState = _e[1];
-    var _f = __read(react_1.useState(undefined), 2), selectedTitle = _f[0], setSelectedTitle = _f[1];
-    var titles = Array.from(graphsMap.keys());
+    var _f = __read(react_1.useState(defaultState), 2), state = _f[0], setState = _f[1];
+    var _g = __read(react_1.useState(undefined), 2), selectedTitle = _g[0], setSelectedTitle = _g[1];
+    var titles = Array.from(docs.map(function (doc) { return doc.title; }));
     if (selectedTitle === undefined && titles[0] !== undefined) {
         setSelectedTitle(titles[0]);
     }
     var listOfDocs = ce('ul', null, titles.map(function (title) { return ce('li', { key: title }, title, ce('button', { disabled: title === selectedTitle, onClick: function () { return setSelectedTitle(title); } }, 'select')); }));
-    var _g = __read(react_1.useState(0), 2), updateTrigger = _g[0], setUpdateTrigger = _g[1];
-    var graph = graphsMap.get(selectedTitle || '');
+    var _h = __read(react_1.useState(0), 2), updateTrigger = _h[0], setUpdateTrigger = _h[1];
+    // const graph = graph.get(selectedTitle || '');
     var learn = graph ? ce(Learn, {
         graph: graph,
+        doc: docs.filter(function (doc) { return doc.title === selectedTitle; })[0],
         learn: function (keys) { return db ? web.learnQuizzes(db, keys, graph) : 0; },
         unlearn: function (keys) { return db ? web.unlearnQuizzes(db, keys, graph) : 0; },
     })
@@ -620,8 +616,7 @@ function Main() {
             });
         }); }
     });
-    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: Array.from(graphsMap.values(), function (graph) { return graph.doc; }), updateDoc: updateDoc })
-        : state === 'quiz' ? quiz : state === 'learn' ? learn : login;
+    var body = state === 'edit' ? ce(Edit_1.Edit, { docs: docs, updateDoc: updateDoc }) : state === 'quiz' ? quiz : state === 'learn' ? learn : login;
     var setStateDebounce = function (x) {
         if (x !== state) {
             setState(x);

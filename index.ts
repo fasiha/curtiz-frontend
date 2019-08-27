@@ -15,7 +15,7 @@ import {Edit} from './Edit';
 
 const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
-type GraphType = QuizGraph&KeyToEbisu&{doc: Doc};
+type GraphType = QuizGraph&KeyToEbisu;
 
 function FuriganaComponent(props: {furigana?: Furigana[], furiganaString?: string}) {
   const arr = [];
@@ -107,9 +107,9 @@ function Block(
   )
 }
 
-function Learn(props: {graph: GraphType, learn: (keys: string[]) => any, unlearn: (keys: string[]) => any}) {
-  const blocks = markdownToBlocks(props.graph.doc.content);
-  return ce('div', null, blocks.map((block, i) => ce(Block, {...props, key: props.graph.doc.title + '/' + i, block})));
+function Learn(props: {graph: GraphType, doc:Doc, learn: (keys: string[]) => any, unlearn: (keys: string[]) => any}) {
+  const blocks = markdownToBlocks(props.doc.content);
+  return ce('div', null, blocks.map((block, i) => ce(Block, {...props, key: props.doc.title + '/' + i, block})));
   // Without `key` above, React doesn't properly handle the reducer.
 }
 
@@ -234,12 +234,12 @@ function Quizzer(props: {graph: GraphType, update: (result: boolean, key: string
 }
 
 type AppState = 'edit'|'learn'|'quiz'|'login';
-type GraphsMap = Map<string, GraphType>;
 type CurtizEvent = web.EventLearn|web.EventUnlearn|web.EventUpdate|EventDoc;
 function Main() {
   const [db, setDb] = useState(undefined as Db | undefined);
-  const defaultGraphsMap: GraphsMap = new Map();
-  const [graphsMap, setGraphsMap] = useState(defaultGraphsMap);
+  const defaultGraph: GraphType|undefined = undefined;
+  const [graph, setGraph] = useState(defaultGraph as GraphType | undefined);
+  const [docs, setDocs] = useState([] as Doc[]);
   const [gatty, setGatty] = useState(undefined as Gatty | undefined)
   const [lastSharedUid, setLastSharedUid] = useState('' as string);
 
@@ -299,16 +299,22 @@ function Main() {
       const newName = 'New ' + date.toISOString();
       docs.push({title: newName, content: '(empty)', source: undefined, modified: date});
     }
-    const graphs: GraphsMap = new Map();
+    setDocs(docs);
+
+    let graph: GraphType|undefined = undefined;
     for (const doc of docs) {
       try {
-        graphs.set(doc.title, {...await web.initialize(newdb, doc.content), doc});
+        if (!graph) {
+          graph = await web.initialize(newdb, doc.content);
+        } else {
+          textToGraph(doc.content, graph);
+        }
       } catch (e) {
         alert('Error caught. See JS Console');
         console.error('Error analyzing text. Skipping', e);
       }
     }
-    setGraphsMap(graphs);
+    if (graph) { setGraph(graph); }
   }
   useEffect(() => { loader(); }, [0]);
 
@@ -316,7 +322,8 @@ function Main() {
     if (!db) { throw new Error('cannot update doc when db undefined'); }
     saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, doc);
     try {
-      graphsMap.set(doc.title, {...await web.initialize(db, doc.content), doc});
+      textToGraph(doc.content, graph);
+      setGraph(graph);
     } catch (e) {
       alert('Error caught. See JS Console');
       console.error('Error analyzing text. Skipping', e);
@@ -327,7 +334,7 @@ function Main() {
   const [state, setState] = useState(defaultState as AppState);
 
   const [selectedTitle, setSelectedTitle] = useState(undefined as string | undefined);
-  const titles = Array.from(graphsMap.keys());
+  const titles = Array.from(docs.map(doc => doc.title));
   if (selectedTitle === undefined && titles[0] !== undefined) { setSelectedTitle(titles[0]) }
   const listOfDocs = ce(
       'ul', null,
@@ -336,9 +343,10 @@ function Main() {
                                 'select'))));
 
   const [updateTrigger, setUpdateTrigger] = useState(0);
-  const graph = graphsMap.get(selectedTitle || '');
+  // const graph = graph.get(selectedTitle || '');
   const learn = graph ? ce(Learn, {
     graph,
+    doc:docs.filter(doc=>doc.title===selectedTitle)[0],
     learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0,
     unlearn: (keys: string[]) => db ? web.unlearnQuizzes(db, keys, graph) : 0,
   })
@@ -356,8 +364,8 @@ function Main() {
       if (gatty !== newgatty) { setGatty(newgatty); }
     }
   });
-  const body = state === 'edit' ? ce(Edit, {docs: Array.from(graphsMap.values(), graph => graph.doc), updateDoc})
-                                : state === 'quiz' ? quiz : state === 'learn' ? learn : login;
+  const body =
+      state === 'edit' ? ce(Edit, {docs, updateDoc}) : state === 'quiz' ? quiz : state === 'learn' ? learn : login;
 
   const setStateDebounce = (x: AppState) => {
     if (x !== state) {
