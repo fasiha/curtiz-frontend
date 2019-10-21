@@ -15,7 +15,7 @@ import {Edit} from './Edit';
 
 const ce = React.createElement;
 type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
-type GraphType = QuizGraph&KeyToEbisu;
+type GraphType = QuizGraph&KeyToEbisu; // ebisus, nodes, edges, raws
 
 function FuriganaComponent(props: {furigana?: Furigana[], furiganaString?: string}) {
   const arr = [];
@@ -107,7 +107,7 @@ function Block(
   )
 }
 
-function Learn(props: {graph: GraphType, doc:Doc, learn: (keys: string[]) => any, unlearn: (keys: string[]) => any}) {
+function Learn(props: {graph: GraphType, doc: Doc, learn: (keys: string[]) => any, unlearn: (keys: string[]) => any}) {
   const blocks = markdownToBlocks(props.doc.content);
   return ce('div', null, blocks.map((block, i) => ce(Block, {...props, key: props.doc.title + '/' + i, block})));
   // Without `key` above, React doesn't properly handle the reducer.
@@ -243,20 +243,28 @@ function Main() {
   const [gatty, setGatty] = useState(undefined as Gatty | undefined)
   const [lastSharedUid, setLastSharedUid] = useState('' as string);
 
-  async function syncer() {
+  async function syncer(gatty?: Gatty) {
+    console.log('in SYNCER initial', {db, gatty, lastSharedUid});
     if (gatty && db) {
       const opts:
           AbstractIteratorOptions<string> = {gt: web.EVENT_PREFIX + lastSharedUid, lt: web.EVENT_PREFIX + '\ufe0f'};
       const res = await web.summarizeDb(db, opts);
-      const {newEvents, newSharedUid} = await sync(gatty, lastSharedUid, res.map(o => o.key), res.map(o => o.value));
-      if (newSharedUid !== lastSharedUid) {
-        const events: CurtizEvent[] = newEvents.map(s => JSON.parse(s));
+      console.log('BEFORE sync, in syncer', {res, lastSharedUid});
+      const {newEvents, newSharedUid} =
+          await sync(gatty, lastSharedUid, res.map(o => o.value.uid), res.map(o => JSON.stringify(o.value)));
+      console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
+
+      // if something recent was shared, or something old synced only now:
+
+      if (newSharedUid !== lastSharedUid || newEvents.length) {
+        const events: CurtizEvent[] = newEvents.map(s => JSON.parse(s[1]));
         const batch: AbstractBatch[] = [{type: 'put', key: 'lastSharedUid', value: newSharedUid}];
+        const newDocs: Map<string, Doc> = new Map();
         {
           const dbKeyToBatch: Map<string, AbstractBatch> = new Map([]);
           for (const e of events) {
             // event should be committed to local db as is
-            batch.push({type: 'put', key: e.uid, value: e});
+            batch.push({type: 'put', key: web.EVENT_PREFIX + e.uid, value: e});
             // local db should update the things the events talk about too!
             if (e.action === 'learn' || e.action === 'update') {
               const key = web.EBISU_PREFIX + e.key;
@@ -264,6 +272,7 @@ function Main() {
             } else if (e.action === 'doc') {
               const key = DOCS_PREFIX + e.doc.title;
               dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
+              newDocs.set(e.doc.title, e.doc);
             } else if (e.action === 'unlearn') {
               const key = web.EBISU_PREFIX + e.key;
               dbKeyToBatch.set(key, {type: 'del', key});
@@ -275,20 +284,30 @@ function Main() {
         }
         await db.batch(batch);
         setLastSharedUid(newSharedUid);
+        if (graph && batch.length) {
+          console.log('before updating graph!', {batch, events, newDocs, graph})
+          const newGraph: GraphType = {...graph};
+          for (const doc of newDocs.values()) { textToGraph(doc.content, newGraph); }
+          console.log('after updating graph!', {graph})
+
+          setGraph({...newGraph, ...await web.loadEbisus(db)});
+        }
       }
     }
   }
 
   async function loader() {
+    console.log('about to run web.setup')
     const newdb = db || web.setup('testing');
+    console.log('in loader', {newdb});
     if (db !== newdb) { setDb(newdb); }
 
     if (newdb) {
       const foo = await web.summarizeDb(newdb) as {key: string, value: any}[];
-      console.log(foo);
+      console.log('in newdb', foo);
 
       try {
-        const fromDb = await newdb.get('lastSharedUid');
+        const fromDb = await newdb.get('lastSharedUid', {asBuffer: false});
         if (lastSharedUid !== fromDb) { setLastSharedUid(fromDb); }
       } catch (e) { await newdb.put('lastSharedUid', lastSharedUid); }
     }
@@ -346,22 +365,40 @@ function Main() {
   // const graph = graph.get(selectedTitle || '');
   const learn = graph ? ce(Learn, {
     graph,
-    doc:docs.filter(doc=>doc.title===selectedTitle)[0],
-    learn: (keys: string[]) => db ? web.learnQuizzes(db, keys, graph) : 0,
-    unlearn: (keys: string[]) => db ? web.unlearnQuizzes(db, keys, graph) : 0,
+    doc: docs.filter(doc => doc.title === selectedTitle)[0],
+    learn: (keys: string[]) => {
+      if (db) {
+        web.learnQuizzes(db, keys, graph);
+        syncer(gatty);
+      }
+    },
+    unlearn: (keys: string[]) => {
+      if (db) {
+        web.unlearnQuizzes(db, keys, graph);
+        console.log('sync2.');
+        syncer(gatty);
+      }
+    },
   })
                       : '';
   const quiz = (graph) ? ce(Quizzer, {
     key: selectedTitle,
     graph,
     updateTrigger,
-    update: (result: boolean, key: string) => web.updateQuiz(db as Db, result, key, graph)
+    update: (result: boolean, key: string) => {
+      web.updateQuiz(db as Db, result, key, graph);
+      console.log('sync1..');
+      syncer(gatty);
+    }
   })
                        : '';
   const login = ce(Login, {
     tellparent: async (url, username, token) => {
       const newgatty = gatty || await setup({corsProxy: 'https://cors.isomorphic-git.org', username, token}, url);
-      if (gatty !== newgatty) { setGatty(newgatty); }
+      if (gatty !== newgatty) {
+        setGatty(newgatty);
+        syncer(newgatty);
+      }
     }
   });
   const body =

@@ -31,8 +31,13 @@ export interface EventDoc extends EventBase {
   doc: Doc;
   action: 'doc';
 }
-export function saveDoc(db: Db, prefix: string, eventPrefix: string, doc: Doc): Promise<void> {
-  const uid = doc.title + '-' + Math.random().toString(36).slice(2);
+export function saveDoc(db: Db, prefix: string, eventPrefix: string, doc: Doc,
+                        opts: {date?: Date} = {}): Promise<void> {
+  const date = opts.date || new Date();
+
+  const uid = `${date.toISOString()}-${Math.random().toString(36).slice(2)}-doc`;
+  // need to ensure this lexsorts LAST. FIXME
+
   const eventValue: EventDoc = {doc, uid, action: 'doc', date: new Date()};
   return db.batch([
     {type: 'put', key: prefix + doc.title, value: doc},
