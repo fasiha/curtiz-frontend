@@ -445,18 +445,6 @@ function Login(props: {tellparent: (a: string, b: string, c: string) => void}) {
           ce(
               'div',
               {className: 'input-group'},
-              ce('label', null, 'URL'),
-              ce('input', {
-                type: 'text',
-                autoCapitalize: 'none',
-                autoCorrect: 'off',
-                value: url,
-                onChange: e => setURL(e.target.value)
-              }),
-              ),
-          ce(
-              'div',
-              {className: 'input-group'},
               ce('label', null, 'Username'),
               ce('input', {
                 type: 'text',
@@ -464,6 +452,18 @@ function Login(props: {tellparent: (a: string, b: string, c: string) => void}) {
                 autoCorrect: 'off',
                 value: username,
                 onChange: e => setUsername(e.target.value)
+              }),
+              ),
+          ce(
+              'div',
+              {className: 'input-group'},
+              ce('label', null, 'URL'),
+              ce('input', {
+                type: 'text',
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                value: url,
+                onChange: e => setURL(e.target.value)
               }),
               ),
           ce(

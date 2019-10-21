@@ -481,18 +481,18 @@ function Login(props) {
             e.preventDefault();
             props.tellparent(url, username, token);
         }
-    }, ce('div', { className: 'input-group' }, ce('label', null, 'URL'), ce('input', {
-        type: 'text',
-        autoCapitalize: 'none',
-        autoCorrect: 'off',
-        value: url,
-        onChange: e => setURL(e.target.value)
-    })), ce('div', { className: 'input-group' }, ce('label', null, 'Username'), ce('input', {
+    }, ce('div', { className: 'input-group' }, ce('label', null, 'Username'), ce('input', {
         type: 'text',
         autoCapitalize: 'none',
         autoCorrect: 'off',
         value: username,
         onChange: e => setUsername(e.target.value)
+    })), ce('div', { className: 'input-group' }, ce('label', null, 'URL'), ce('input', {
+        type: 'text',
+        autoCapitalize: 'none',
+        autoCorrect: 'off',
+        value: url,
+        onChange: e => setURL(e.target.value)
     })), ce('div', { className: 'input-group' }, ce('label', null, 'Token'), ce('input', { type: 'password', value: token, onChange: e => setToken(e.target.value) })), ce('input', { type: 'submit', value: 'Login' })));
 }
 react_dom_1.default.render(ce(Main), document.getElementById('root'));
