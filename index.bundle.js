@@ -454,7 +454,7 @@ function Main() {
         }
     })
         : '';
-    const login = ce(Login, {
+    const login = gatty ? 'Already logged in! Refresh to log out.' : ce(Login, {
         tellparent: (url, username, token) => __awaiter(this, void 0, void 0, function* () {
             const newgatty = gatty || (yield isomorphic_gatty_1.setup({ corsProxy: 'https://cors.isomorphic-git.org', username, token }, url));
             if (gatty !== newgatty) {
@@ -470,7 +470,7 @@ function Main() {
             setUpdateTrigger(updateTrigger + 1);
         }
     };
-    return ce('div', null, ce('button', { onClick: () => setStateDebounce('edit') }, 'Edit'), ce('button', { onClick: () => setStateDebounce('learn') }, 'Learn'), ce('button', { onClick: () => setStateDebounce('quiz') }, 'Quiz'), ce('button', { onClick: () => setStateDebounce('login') }, 'Login'), ce('div', null, listOfDocs, body));
+    return ce('div', null, ce('button', { onClick: () => setStateDebounce('edit') }, 'Edit'), ce('button', { onClick: () => setStateDebounce('learn') }, 'Learn'), ce('button', { onClick: () => setStateDebounce('quiz') }, 'Quiz'), ce('button', { onClick: () => setStateDebounce('login') }, 'Login'), ce('button', { onClick: () => syncer(gatty) }, 'Sync'), ce('div', null, listOfDocs, body));
 }
 function Login(props) {
     const [url, setURL] = react_1.useState('');

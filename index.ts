@@ -397,7 +397,7 @@ function Main() {
     }
   })
                        : '';
-  const login = ce(Login, {
+  const login = gatty ? 'Already logged in! Refresh to log out.' : ce(Login, {
     tellparent: async (url, username, token) => {
       const newgatty = gatty || await setup({corsProxy: 'https://cors.isomorphic-git.org', username, token}, url);
       if (gatty !== newgatty) {
@@ -422,6 +422,7 @@ function Main() {
       ce('button', {onClick: () => setStateDebounce('learn')}, 'Learn'),
       ce('button', {onClick: () => setStateDebounce('quiz')}, 'Quiz'),
       ce('button', {onClick: () => setStateDebounce('login')}, 'Login'),
+      ce('button', {onClick: () => syncer(gatty)}, 'Sync'),
       ce('div', null, listOfDocs, body),
   );
 }
