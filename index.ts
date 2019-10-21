@@ -242,17 +242,16 @@ function Main() {
   const [docs, setDocs] = useState([] as Doc[]);
   const [gatty, setGatty] = useState(undefined as Gatty | undefined)
   const [lastSharedUid, setLastSharedUid] = useState('' as string);
-
   async function syncer(gatty?: Gatty) {
-    console.log('in SYNCER initial', {db, gatty, lastSharedUid});
+    // console.log('in SYNCER initial', {db, gatty, lastSharedUid});
     if (gatty && db) {
       const opts:
           AbstractIteratorOptions<string> = {gt: web.EVENT_PREFIX + lastSharedUid, lt: web.EVENT_PREFIX + '\ufe0f'};
       const res = await web.summarizeDb(db, opts);
-      console.log('BEFORE sync, in syncer', {res, lastSharedUid});
+      // console.log('BEFORE sync, in syncer', {res, lastSharedUid});
       const {newEvents, newSharedUid} =
           await sync(gatty, lastSharedUid, res.map(o => o.value.uid), res.map(o => JSON.stringify(o.value)));
-      console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
+      // console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
 
       // if something recent was shared, or something old synced only now:
 
@@ -283,29 +282,38 @@ function Main() {
           for (const value of dbKeyToBatch.values()) { batch.push(value); }
         }
         await db.batch(batch);
-        setLastSharedUid(newSharedUid);
         if (graph && batch.length) {
-          console.log('before updating graph!', {batch, events, newDocs, graph})
-          const newGraph: GraphType = {...graph};
+          const newGraph: GraphType = {
+            ebisus: new Map(graph.ebisus),
+            edges: new Map(graph.edges),
+            nodes: new Map(graph.nodes),
+            raws: new Map(graph.raws),
+          };
           for (const doc of newDocs.values()) { textToGraph(doc.content, newGraph); }
-          console.log('after updating graph!', {graph})
+          const finalGraph = {...newGraph, ...await web.loadEbisus(db)};
 
-          setGraph({...newGraph, ...await web.loadEbisus(db)});
+          const newDocsArr = docs.slice();
+          for (const [k, v] of newDocs) {
+            const didx = newDocsArr.findIndex(doc => doc.title === k);
+            if (didx >= 0) {
+              newDocsArr.splice(didx, 1, v);
+            } else {
+              newDocsArr.push(v);
+            }
+          }
+          setGraph(finalGraph);
+          setDocs(newDocsArr);
         }
+        setLastSharedUid(newSharedUid);
       }
     }
   }
 
   async function loader() {
-    console.log('about to run web.setup')
     const newdb = db || web.setup('testing');
-    console.log('in loader', {newdb});
     if (db !== newdb) { setDb(newdb); }
 
     if (newdb) {
-      const foo = await web.summarizeDb(newdb) as {key: string, value: any}[];
-      console.log('in newdb', foo);
-
       try {
         const fromDb = await newdb.get('lastSharedUid', {asBuffer: false});
         if (lastSharedUid !== fromDb) { setLastSharedUid(fromDb); }
@@ -362,7 +370,6 @@ function Main() {
                                 'select'))));
 
   const [updateTrigger, setUpdateTrigger] = useState(0);
-  // const graph = graph.get(selectedTitle || '');
   const learn = graph ? ce(Learn, {
     graph,
     doc: docs.filter(doc => doc.title === selectedTitle)[0],
@@ -375,7 +382,6 @@ function Main() {
     unlearn: (keys: string[]) => {
       if (db) {
         web.unlearnQuizzes(db, keys, graph);
-        console.log('sync2.');
         syncer(gatty);
       }
     },
@@ -387,7 +393,6 @@ function Main() {
     updateTrigger,
     update: (result: boolean, key: string) => {
       web.updateQuiz(db as Db, result, key, graph);
-      console.log('sync1..');
       syncer(gatty);
     }
   })

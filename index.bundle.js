@@ -288,13 +288,13 @@ function Main() {
     const [lastSharedUid, setLastSharedUid] = react_1.useState('');
     function syncer(gatty) {
         return __awaiter(this, void 0, void 0, function* () {
-            console.log('in SYNCER initial', { db, gatty, lastSharedUid });
+            // console.log('in SYNCER initial', {db, gatty, lastSharedUid});
             if (gatty && db) {
                 const opts = { gt: web.EVENT_PREFIX + lastSharedUid, lt: web.EVENT_PREFIX + '\ufe0f' };
                 const res = yield web.summarizeDb(db, opts);
-                console.log('BEFORE sync, in syncer', { res, lastSharedUid });
+                // console.log('BEFORE sync, in syncer', {res, lastSharedUid});
                 const { newEvents, newSharedUid } = yield isomorphic_gatty_1.sync(gatty, lastSharedUid, res.map(o => o.value.uid), res.map(o => JSON.stringify(o.value)));
-                console.log('!AFTER sync in syncer', { newEvents, newSharedUid });
+                // console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
                 // if something recent was shared, or something old synced only now:
                 if (newSharedUid !== lastSharedUid || newEvents.length) {
                     const events = newEvents.map(s => JSON.parse(s[1]));
@@ -328,31 +328,42 @@ function Main() {
                         }
                     }
                     yield db.batch(batch);
-                    setLastSharedUid(newSharedUid);
                     if (graph && batch.length) {
-                        console.log('before updating graph!', { batch, events, newDocs, graph });
-                        const newGraph = Object.assign({}, graph);
+                        const newGraph = {
+                            ebisus: new Map(graph.ebisus),
+                            edges: new Map(graph.edges),
+                            nodes: new Map(graph.nodes),
+                            raws: new Map(graph.raws),
+                        };
                         for (const doc of newDocs.values()) {
                             curtiz_parse_markdown_1.textToGraph(doc.content, newGraph);
                         }
-                        console.log('after updating graph!', { graph });
-                        setGraph(Object.assign({}, newGraph, yield web.loadEbisus(db)));
+                        const finalGraph = Object.assign({}, newGraph, yield web.loadEbisus(db));
+                        const newDocsArr = docs.slice();
+                        for (const [k, v] of newDocs) {
+                            const didx = newDocsArr.findIndex(doc => doc.title === k);
+                            if (didx >= 0) {
+                                newDocsArr.splice(didx, 1, v);
+                            }
+                            else {
+                                newDocsArr.push(v);
+                            }
+                        }
+                        setGraph(finalGraph);
+                        setDocs(newDocsArr);
                     }
+                    setLastSharedUid(newSharedUid);
                 }
             }
         });
     }
     function loader() {
         return __awaiter(this, void 0, void 0, function* () {
-            console.log('about to run web.setup');
             const newdb = db || web.setup('testing');
-            console.log('in loader', { newdb });
             if (db !== newdb) {
                 setDb(newdb);
             }
             if (newdb) {
-                const foo = yield web.summarizeDb(newdb);
-                console.log('in newdb', foo);
                 try {
                     const fromDb = yield newdb.get('lastSharedUid', { asBuffer: false });
                     if (lastSharedUid !== fromDb) {
@@ -416,7 +427,6 @@ function Main() {
     }
     const listOfDocs = ce('ul', null, titles.map(title => ce('li', { key: title }, title, ce('button', { disabled: title === selectedTitle, onClick: () => setSelectedTitle(title) }, 'select'))));
     const [updateTrigger, setUpdateTrigger] = react_1.useState(0);
-    // const graph = graph.get(selectedTitle || '');
     const learn = graph ? ce(Learn, {
         graph,
         doc: docs.filter(doc => doc.title === selectedTitle)[0],
@@ -429,7 +439,6 @@ function Main() {
         unlearn: (keys) => {
             if (db) {
                 web.unlearnQuizzes(db, keys, graph);
-                console.log('sync2.');
                 syncer(gatty);
             }
         },
@@ -441,7 +450,6 @@ function Main() {
         updateTrigger,
         update: (result, key) => {
             web.updateQuiz(db, result, key, graph);
-            console.log('sync1..');
             syncer(gatty);
         }
     })

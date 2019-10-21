@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc -p .",
     "dist": "browserify index.js -o index.bundle.js",
-    "watch": "fswatch -0 -o -l .1 index.js | xargs -0 -n 1 -I {} npm run dist"
+    "watch": "fswatch -0 -o -l .1 index.js docs.js Edit.js | xargs -0 -n 1 -I {} npm run dist"
   },
   "keywords": [],
   "author": "",
