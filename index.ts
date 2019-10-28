@@ -324,7 +324,7 @@ function Main() {
     { // add new empty doc for editing
       const date = new Date();
       const newName = 'New ' + date.toISOString();
-      docs.push({title: newName, content: '(empty)', source: undefined, modified: date});
+      docs.push({title: newName, content: '(empty)', source: {type: 'manual', created: date}, modified: date});
     }
     setDocs(docs);
 

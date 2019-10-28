@@ -34,11 +34,16 @@ exports.Edit = Edit;
 },{"react":173}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+function docToStorageKey(doc, prefix) {
+    // eventually this will do something with the other sources
+    return prefix + doc.source.created.toISOString();
+}
 function rehydrateDoc(nominalDoc) {
-    if (nominalDoc.modified instanceof Date) {
+    if (nominalDoc.modified instanceof Date && nominalDoc.source.created instanceof Date) {
         return nominalDoc;
     }
     nominalDoc.modified = new Date(nominalDoc.modified);
+    nominalDoc.source.created = new Date(nominalDoc.source.created);
     return nominalDoc;
 }
 exports.DOCS_PREFIX = 'docs/';
@@ -55,10 +60,11 @@ exports.loadDocs = loadDocs;
 function saveDoc(db, prefix, eventPrefix, doc, opts = {}) {
     const date = opts.date || new Date();
     const uid = `${date.toISOString()}-${Math.random().toString(36).slice(2)}-doc`;
-    // need to ensure this lexsorts LAST. FIXME
-    const eventValue = { doc, uid, action: 'doc', date: new Date() };
+    // need to ensure this lexsorts LAST: possible you've sync'd an event at the exact same date, and this uid lexsorts
+    // before that one. FIXME
+    const eventValue = { doc, uid, action: 'doc', date };
     return db.batch([
-        { type: 'put', key: prefix + doc.title, value: doc },
+        { type: 'put', key: docToStorageKey(doc, prefix), value: doc },
         { type: 'put', key: eventPrefix + uid, value: eventValue },
     ]);
 }
@@ -378,7 +384,7 @@ function Main() {
             { // add new empty doc for editing
                 const date = new Date();
                 const newName = 'New ' + date.toISOString();
-                docs.push({ title: newName, content: '(empty)', source: undefined, modified: date });
+                docs.push({ title: newName, content: '(empty)', source: { type: 'manual', created: date }, modified: date });
             }
             setDocs(docs);
             let graph = undefined;

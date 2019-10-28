@@ -1,5 +1,6 @@
-TSSRC=$(wildcard *.ts)
-JSSRC=$(TSSRC:.ts=.js)
+TSSRC := $(wildcard *.ts)
+JSSRC := $(TSSRC:.ts=.js)
+JSSRC := $(filter-out *bundle*, $(JSSRC))
 
 all: index.bundle.js withRedux.bundle.js
 
