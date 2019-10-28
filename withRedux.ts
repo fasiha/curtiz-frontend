@@ -9,7 +9,7 @@ import {applyMiddleware, createStore, Dispatch} from 'redux';
 import {createLogger} from 'redux-logger';
 import thunkMiddleware from 'redux-thunk';
 
-import {Doc, DOCS_PREFIX, loadDocs} from './docs';
+import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
 
 export type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 
@@ -43,9 +43,7 @@ type ReqDb = ReqDbStarted|ReqDbFinished;
 interface SaveDoc {
   type: 'saveDoc';
   oldDoc: Doc;
-  title: string;
-  contents: string;
-  date: Date;
+  newDoc: Doc;
 }
 
 /*
@@ -53,11 +51,13 @@ interface SaveDoc {
 */
 interface State {
   db?: Db;
+  dbLoading: boolean;
   docs: Doc[];
 }
 
 const INITIAL_STATE: State = {
   db: undefined,
+  dbLoading: false,
   docs: []
 };
 
@@ -68,12 +68,13 @@ This is a fully synchronous function, nothing weird or async here.
 function rootReducer(state = INITIAL_STATE, action: Action): State {
   if (action.type === 'reqDb') {
     if (action.status === 'started') {
-      return {db: undefined, docs: []};
-    } else if (action.status === 'finished') {
-      return {db: action.db, docs: action.docs};
+      return {db: undefined, docs: [], dbLoading: true};
     } else {
-      throw new Error('unknown action.status');
+      return {db: action.db, docs: action.docs, dbLoading: false};
     }
+  } else if (action.type === 'saveDoc') {
+    const {oldDoc, newDoc} = action;
+    return { ...state, docs: state.docs.map(doc => doc === oldDoc ? newDoc : doc) }
   }
   return state;
 }
@@ -96,6 +97,16 @@ function initdb(dbName: string) {
   }
 }
 
+function saveDocThunk(db: Db, oldDoc: Doc, contents: string, title: string, date?: Date) {
+  return async (dispatch: Dispatch) => {
+    date = date || new Date();
+    const newDoc = {...oldDoc, contents, title, date};
+    await saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, newDoc, {date});
+    const action: SaveDoc = {type: 'saveDoc', oldDoc, newDoc};
+    dispatch(action);
+  }
+}
+
 /*
 # Step 5. Create the store.
 */
@@ -109,19 +120,20 @@ const ce = React.createElement;
 type SaveDocType = (doc: Doc, contents: string, title: string, date?: Date) => void;
 
 function EditableDoc(props: {doc: Doc, saveDoc: SaveDocType}) {
-  const [value, setValue] = useState(props.doc.content);
+  const [content, setContent] = useState(props.doc.content);
+  const [title, setTitle] = useState(props.doc.title);
   return ce(
       'div',
       null,
-      props.doc.title,
+      ce('input', {type: 'text', value: title, onChange: e => setTitle(e.target.value)}),
       ce('textarea', {
-        value,
+        value: content,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
           // console.log('onChange', e);
-          setValue(e.target.value)
+          setContent(e.target.value)
         }
       }),
-      ce('button', {onClick: (_: any) => { props.saveDoc(props.doc, value, props.doc.title, new Date()); }}, 'Submit'),
+      ce('button', {onClick: (_: any) => { props.saveDoc(props.doc, content, title, new Date()); }}, 'Submit'),
   )
 }
 
@@ -135,12 +147,11 @@ function Editor(props: EditorProps) {
 }
 
 function App() {
-  const {db, docs} = useSelector((state: State) => ({db: state.db, docs: state.docs}));
+  const {db, docs, dbLoading} = useSelector(({db, docs, dbLoading}: State) => ({db, docs, dbLoading}));
   const dispatch = useDispatch();
-  if (!db) { dispatch(initdb('testing')) }
+  if (!db && !dbLoading) { dispatch(initdb('testing')) }
   const saveDoc: SaveDocType = (doc: Doc, contents: string, title: string, date?: Date) => {
-    const action: SaveDoc = {type: 'saveDoc', oldDoc: doc, title, contents, date: date || new Date()};
-    dispatch(action);
+    if (db) { dispatch(saveDocThunk(db, doc, contents, title, date)); }
   };
 
   return ce(Editor, {docs, saveDoc});

@@ -6,11 +6,11 @@ all: index.bundle.js withRedux.bundle.js
 %.js: %.ts
 	npm run build
 
-index.bundle.js: $(JSSRC)
+index.bundle.js: index.js
 	npm run dist
 	echo done
 
-withRedux.bundle.js: $(JSSRC)
+withRedux.bundle.js: withRedux.js
 	npx browserify withRedux.js -o withRedux.bundle.js
 	echo done redux
 
