@@ -18,6 +18,8 @@
     "@types/levelup": "^3.1.1",
     "@types/react": "^16.8.23",
     "@types/react-dom": "^16.8.4",
+    "@types/react-redux": "^7.1.5",
+    "@types/redux-logger": "^3.0.7",
     "browserify": "^16.2.3",
     "typescript": "^3.5.2"
   },
@@ -29,6 +31,10 @@
     "curtiz-web-db": "git+https://github.com/fasiha/curtiz-web-db.git",
     "isomorphic-gatty": "git+https://github.com/fasiha/isomorphic-gatty.git",
     "react": "^16.8.6",
-    "react-dom": "^16.8.6"
+    "react-dom": "^16.8.6",
+    "react-redux": "^7.1.1",
+    "redux": "^4.0.4",
+    "redux-logger": "^3.0.6",
+    "redux-thunk": "^2.3.0"
   }
 }

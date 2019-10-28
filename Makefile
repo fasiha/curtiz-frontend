@@ -1,7 +1,7 @@
 TSSRC=$(wildcard *.ts)
 JSSRC=$(TSSRC:.ts=.js)
 
-all: index.bundle.js
+all: index.bundle.js withRedux.bundle.js
 
 %.js: %.ts
 	npm run build
@@ -9,6 +9,10 @@ all: index.bundle.js
 index.bundle.js: $(JSSRC)
 	npm run dist
 	echo done
+
+withRedux.bundle.js: $(JSSRC)
+	npx browserify withRedux.js -o withRedux.bundle.js
+	echo done redux
 
 # Assumes VS Code is running in watch build mode
 watch:
