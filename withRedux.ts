@@ -42,7 +42,7 @@ interface ReqDbFinished extends ReqDbBase {
 type ReqDb = ReqDbStarted|ReqDbFinished;
 interface SaveDoc {
   type: 'saveDoc';
-  oldDoc: Doc;
+  oldDoc?: Doc;
   newDoc: Doc;
 }
 
@@ -74,7 +74,11 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     }
   } else if (action.type === 'saveDoc') {
     const {oldDoc, newDoc} = action;
-    return { ...state, docs: state.docs.map(doc => doc === oldDoc ? newDoc : doc) }
+    if (oldDoc) {
+      return { ...state, docs: state.docs.map(doc => doc === oldDoc ? newDoc : doc) }
+    }
+    const docs = state.docs.concat(newDoc);
+    return {...state, docs};
   }
   return state;
 }
@@ -97,10 +101,10 @@ function initdb(dbName: string) {
   }
 }
 
-function saveDocThunk(db: Db, oldDoc: Doc, contents: string, title: string, date?: Date) {
+function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: string, date?: Date) {
   return async (dispatch: Dispatch) => {
     date = date || new Date();
-    const newDoc = {...oldDoc, contents, title, date};
+    const newDoc: Doc = {...(oldDoc || {source: {type: 'manual', created: date}}), content, title, modified: date};
     await saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, newDoc, {date});
     const action: SaveDoc = {type: 'saveDoc', oldDoc, newDoc};
     dispatch(action);
@@ -117,7 +121,7 @@ const store = createStore(rootReducer, applyMiddleware(thunkMiddleware, loggerMi
 # Step 6. Create the presentation components.
 */
 const ce = React.createElement;
-type SaveDocType = (doc: Doc, contents: string, title: string, date?: Date) => void;
+type SaveDocType = (doc: Doc|undefined, contents: string, title: string, date?: Date) => void;
 
 function EditableDoc(props: {doc: Doc, saveDoc: SaveDocType}) {
   const [content, setContent] = useState(props.doc.content);
@@ -142,15 +146,20 @@ type EditorProps = {
   saveDoc: SaveDocType
 };
 function Editor(props: EditorProps) {
-  return ce('div', null, ce('p', null, props.docs.length + ' docs!'),
-            ...props.docs.map(doc => ce(EditableDoc, {doc, saveDoc: props.saveDoc})));
+  return ce(
+      'div',
+      null,
+      ce('button', {onClick: () => { props.saveDoc(undefined, 'New document', 'new-doc'); }}, '++'),
+      ce('p', null, props.docs.length + ' docs!'),
+      ...props.docs.map(doc => ce(EditableDoc, {doc, saveDoc: props.saveDoc})),
+  );
 }
 
 function App() {
   const {db, docs, dbLoading} = useSelector(({db, docs, dbLoading}: State) => ({db, docs, dbLoading}));
   const dispatch = useDispatch();
   if (!db && !dbLoading) { dispatch(initdb('testing')) }
-  const saveDoc: SaveDocType = (doc: Doc, contents: string, title: string, date?: Date) => {
+  const saveDoc: SaveDocType = (doc: Doc|undefined, contents: string, title: string, date?: Date) => {
     if (db) { dispatch(saveDocThunk(db, doc, contents, title, date)); }
   };
 
