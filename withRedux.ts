@@ -1,10 +1,12 @@
 import {AbstractIterator} from 'abstract-leveldown';
+import {QuizGraph, textToGraph} from 'curtiz-parse-markdown';
+import {KeyToEbisu} from 'curtiz-quiz-planner';
 import * as web from 'curtiz-web-db';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
 import React, {useState} from 'react';
 import ReactDOM from 'react-dom';
-import {connect, Provider, useDispatch, useSelector} from 'react-redux';
+import {Provider, useDispatch, useSelector} from 'react-redux';
 import {applyMiddleware, createStore, Dispatch} from 'redux';
 import {createLogger} from 'redux-logger';
 import thunkMiddleware from 'redux-thunk';
@@ -12,6 +14,13 @@ import thunkMiddleware from 'redux-thunk';
 import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
 
 export type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
+type GraphType = QuizGraph&KeyToEbisu; // ebisus, nodes, edges, raws
+const emptyGraph: GraphType = {
+  ebisus: new Map(),
+  nodes: new Map(),
+  edges: new Map(),
+  raws: new Map(),
+};
 
 /*
 # Step 1. Set up your action types.
@@ -25,7 +34,8 @@ Each synchronous action just needs a single action type.
 
 Just types, nothing else.
 */
-type Action = ReqDb|SaveDoc;
+type Action = ReqDb|SaveDoc|ScanDocs;
+
 interface ReqDbBase {
   type: 'reqDb';
   dbName: string;
@@ -38,12 +48,18 @@ interface ReqDbFinished extends ReqDbBase {
   status: 'finished';
   db: Db;
   docs: Doc[];
+  ebisus: KeyToEbisu;
 }
 type ReqDb = ReqDbStarted|ReqDbFinished;
+
 interface SaveDoc {
   type: 'saveDoc';
   oldDoc?: Doc;
   newDoc: Doc;
+}
+
+interface ScanDocs {
+  type: 'scanDocs';
 }
 
 /*
@@ -53,12 +69,14 @@ interface State {
   db?: Db;
   dbLoading: boolean;
   docs: Doc[];
+  graph: GraphType;
 }
 
 const INITIAL_STATE: State = {
   db: undefined,
   dbLoading: false,
-  docs: []
+  docs: [],
+  graph: emptyGraph,
 };
 
 /*
@@ -68,9 +86,11 @@ This is a fully synchronous function, nothing weird or async here.
 function rootReducer(state = INITIAL_STATE, action: Action): State {
   if (action.type === 'reqDb') {
     if (action.status === 'started') {
-      return {db: undefined, docs: [], dbLoading: true};
+      return {...INITIAL_STATE};
     } else {
-      return {db: action.db, docs: action.docs, dbLoading: false};
+      const graph: GraphType = {...emptyGraph, ...action.ebisus};
+      action.docs.forEach(doc => textToGraph(doc.content, graph));
+      return {db: action.db, docs: action.docs, dbLoading: false, graph};
     }
   } else if (action.type === 'saveDoc') {
     const {oldDoc, newDoc} = action;
@@ -79,6 +99,10 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     }
     const docs = state.docs.concat(newDoc);
     return {...state, docs};
+  } else if (action.type === 'scanDocs') {
+    const graph: GraphType = {...emptyGraph, ebisus: state.graph.ebisus};
+    state.docs.forEach(doc => textToGraph(doc.content, graph));
+    return {...state, graph};
   }
   return state;
 }
@@ -95,7 +119,8 @@ function initdb(dbName: string) {
     {
       const db = web.setup(dbName);
       const docs = await loadDocs(db, DOCS_PREFIX);
-      const done: ReqDbFinished = {type: 'reqDb', status: 'finished', dbName, db, docs};
+      const ebisus = await web.loadEbisus(db);
+      const done: ReqDbFinished = {type: 'reqDb', status: 'finished', dbName, db, docs, ebisus};
       dispatch(done);
     }
   }
@@ -108,6 +133,8 @@ function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: str
     await saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, newDoc, {date});
     const action: SaveDoc = {type: 'saveDoc', oldDoc, newDoc};
     dispatch(action);
+    const scanDocsAction: ScanDocs = {type: 'scanDocs'};
+    dispatch(scanDocsAction);
   }
 }
 
@@ -155,15 +182,23 @@ function Editor(props: EditorProps) {
   );
 }
 
+type GraphViewerProps = {
+  graph: GraphType
+};
+function GraphViewer(props: GraphViewerProps) { return ce('pre', null, JSON.stringify(props.graph, null, 1)); }
+
 function App() {
-  const {db, docs, dbLoading} = useSelector(({db, docs, dbLoading}: State) => ({db, docs, dbLoading}));
+  const {db, docs, dbLoading, graph} =
+      useSelector(({db, docs, dbLoading, graph}: State) => ({db, docs, dbLoading, graph}));
   const dispatch = useDispatch();
   if (!db && !dbLoading) { dispatch(initdb('testing')) }
   const saveDoc: SaveDocType = (doc: Doc|undefined, contents: string, title: string, date?: Date) => {
     if (db) { dispatch(saveDocThunk(db, doc, contents, title, date)); }
   };
 
-  return ce(Editor, {docs, saveDoc});
+  const editorProps: EditorProps = {docs, saveDoc};
+  const graphViewProps: GraphViewerProps = {graph};
+  return ce('div', null, ce(Editor, editorProps), ce(GraphViewer, graphViewProps));
 }
 
 // Render!
