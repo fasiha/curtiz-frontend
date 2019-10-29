@@ -15,12 +15,7 @@ import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
 
 export type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu; // ebisus, nodes, edges, raws
-const emptyGraph: GraphType = {
-  ebisus: new Map(),
-  nodes: new Map(),
-  edges: new Map(),
-  raws: new Map(),
-};
+function emptyGraph(): GraphType { return {ebisus: new Map(), edges: new Map(), nodes: new Map(), raws: new Map()}; }
 
 /*
 # Step 1. Set up your action types.
@@ -34,7 +29,7 @@ Each synchronous action just needs a single action type.
 
 Just types, nothing else.
 */
-type Action = ReqDb|SaveDoc|ScanDocs;
+type Action = ReqDb|SaveDoc;
 
 interface ReqDbBase {
   type: 'reqDb';
@@ -58,10 +53,6 @@ interface SaveDoc {
   newDoc: Doc;
 }
 
-interface ScanDocs {
-  type: 'scanDocs';
-}
-
 /*
 # Step 2. Define your state type and initial state.
 */
@@ -76,7 +67,7 @@ const INITIAL_STATE: State = {
   db: undefined,
   dbLoading: false,
   docs: [],
-  graph: emptyGraph,
+  graph: emptyGraph(),
 };
 
 /*
@@ -88,21 +79,16 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     if (action.status === 'started') {
       return {...INITIAL_STATE, dbLoading: true};
     } else {
-      const graph: GraphType = {...emptyGraph, ...action.ebisus};
+      const graph: GraphType = {...emptyGraph(), ...action.ebisus};
       action.docs.forEach(doc => textToGraph(doc.content, graph));
       return {db: action.db, docs: action.docs, dbLoading: false, graph};
     }
   } else if (action.type === 'saveDoc') {
     const {oldDoc, newDoc} = action;
-    if (oldDoc) {
-      return { ...state, docs: state.docs.map(doc => doc === oldDoc ? newDoc : doc) }
-    }
-    const docs = state.docs.concat(newDoc);
-    return {...state, docs};
-  } else if (action.type === 'scanDocs') {
-    const graph: GraphType = {...emptyGraph, ebisus: state.graph.ebisus};
-    state.docs.forEach(doc => textToGraph(doc.content, graph));
-    return {...state, graph};
+    const docs = oldDoc ? state.docs.map(doc => doc === oldDoc ? newDoc : doc) : state.docs.concat(newDoc);
+    const graph: GraphType = {...emptyGraph(), ebisus: state.graph.ebisus};
+    docs.forEach((doc, i) => {textToGraph(doc.content, graph)});
+    return {...state, docs, graph};
   }
   return state;
 }
@@ -133,8 +119,6 @@ function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: str
     await saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, newDoc, {date});
     const action: SaveDoc = {type: 'saveDoc', oldDoc, newDoc};
     dispatch(action);
-    const scanDocsAction: ScanDocs = {type: 'scanDocs'};
-    dispatch(scanDocsAction);
   }
 }
 
