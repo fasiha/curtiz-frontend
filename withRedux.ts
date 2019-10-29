@@ -86,7 +86,7 @@ This is a fully synchronous function, nothing weird or async here.
 function rootReducer(state = INITIAL_STATE, action: Action): State {
   if (action.type === 'reqDb') {
     if (action.status === 'started') {
-      return {...INITIAL_STATE};
+      return {...INITIAL_STATE, dbLoading: true};
     } else {
       const graph: GraphType = {...emptyGraph, ...action.ebisus};
       action.docs.forEach(doc => textToGraph(doc.content, graph));
@@ -185,7 +185,11 @@ function Editor(props: EditorProps) {
 type GraphViewerProps = {
   graph: GraphType
 };
-function GraphViewer(props: GraphViewerProps) { return ce('pre', null, JSON.stringify(props.graph, null, 1)); }
+function GraphViewer(props: GraphViewerProps) {
+  return ce(
+      'pre', null,
+      JSON.stringify(Object.entries(props.graph).map(([key, val]) => ({[key]: Array.from(val as any)})), null, 1));
+}
 
 function App() {
   const {db, docs, dbLoading, graph} =
