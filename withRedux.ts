@@ -1,7 +1,9 @@
 import {AbstractIterator} from 'abstract-leveldown';
 import {QuizGraph, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu} from 'curtiz-quiz-planner';
+import {enumerate, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
+import {Furigana, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
 import React, {useState} from 'react';
@@ -175,6 +177,42 @@ function GraphViewer(props: GraphViewerProps) {
       JSON.stringify(Object.entries(props.graph).map(([key, val]) => ({[key]: Array.from(val as any)})), null, 1));
 }
 
+function FuriganaComponent(props: {furigana?: Furigana[], furiganaString?: string}) {
+  const arr = [];
+  for (const f of (props.furigana || stringToFurigana(props.furiganaString || ''))) {
+    arr.push(typeof f === 'string' ? f : ce('ruby', null, f.ruby, ce('rt', null, f.rt)));
+  }
+  return ce('span', {}, ...arr);
+}
+
+function markdownToBlocks(md: string) {
+  const re = /^#+\s+.+$/;
+  const headers = partitionBy(md.split('\n'), s => re.test(s));
+  return headers;
+}
+
+function ShowDocs(props: {docs: Doc[], graph: GraphType}) {
+  const li = ce('li'); // solely used to get type without hardcoding :P
+  type Li = typeof li;
+  const lis: Li[] = [];
+  for (const doc of props.docs) {
+    const blocks = markdownToBlocks(doc.content);
+    for (const [blocknum, block] of enumerate(blocks)) {
+      for (const [lino, line] of enumerate(block)) {
+        const uids = props.graph.raws.get(lino === 0 ? line : block[0] + '\n' + line);
+        const furi = line.startsWith('- @furigana') ? FuriganaComponent({furiganaString: line}) : line;
+        const key = [doc.title, blocknum, lino].join('/');
+        if (uids) {
+          lis.push(ce('li', {key}, furi, ` (${uids.size} flashcards)`));
+        } else {
+          lis.push(ce('li', {key}, furi));
+        }
+      }
+    }
+  }
+  return ce('ul', {}, lis);
+}
+
 function App() {
   const {db, docs, dbLoading, graph} =
       useSelector(({db, docs, dbLoading, graph}: State) => ({db, docs, dbLoading, graph}));
@@ -186,7 +224,7 @@ function App() {
 
   const editorProps: EditorProps = {docs, saveDoc};
   const graphViewProps: GraphViewerProps = {graph};
-  return ce('div', null, ce(Editor, editorProps), ce(GraphViewer, graphViewProps));
+  return ce('div', null, ce(Editor, editorProps), ce(ShowDocs, {graph, docs}), ce(GraphViewer, graphViewProps));
 }
 
 // Render!
