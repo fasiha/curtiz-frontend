@@ -1,7 +1,7 @@
 import {AbstractIterator} from 'abstract-leveldown';
 import {Quiz, QuizGraph, QuizKind, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner';
-import {enumerate, kata2hira, partitionBy} from 'curtiz-utils';
+import {enumerate, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
 import {Furigana, furiganaToString, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
@@ -63,6 +63,7 @@ interface LearnItem {
 interface QuizItem {
   type: 'quizItem';
   ebisus: GraphType['ebisus'];
+  summary: string;
 }
 
 /*
@@ -73,6 +74,7 @@ interface State {
   dbLoading: boolean;
   docs: Doc[];
   graph: GraphType;
+  quizSummaries: string[];
 }
 
 const INITIAL_STATE: State = {
@@ -80,6 +82,7 @@ const INITIAL_STATE: State = {
   dbLoading: false,
   docs: [],
   graph: emptyGraph(),
+  quizSummaries: [],
 };
 
 /*
@@ -93,7 +96,7 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     } else {
       const graph: GraphType = {...emptyGraph(), ...action.ebisus};
       action.docs.forEach(doc => textToGraph(doc.content, graph));
-      return {db: action.db, docs: action.docs, dbLoading: false, graph};
+      return {...state, db: action.db, docs: action.docs, dbLoading: false, graph};
     }
   } else if (action.type === 'saveDoc') {
     const {oldDoc, newDoc} = action;
@@ -102,9 +105,13 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     const graph: GraphType = {...emptyGraph(), ebisus: state.graph.ebisus};
     docs.forEach((doc, i) => {textToGraph(doc.content, graph)});
     return {...state, docs, graph};
-  } else if (action.type === 'learnItem' || action.type === 'quizItem') {
+  } else if (action.type === 'learnItem') {
     const graph = {...state.graph, ebisus: action.ebisus};
     return {...state, graph};
+  } else if (action.type === 'quizItem') {
+    const graph = {...state.graph, ebisus: action.ebisus};
+    const quizSummaries = state.quizSummaries.concat(action.summary);
+    return {...state, graph, quizSummaries};
   }
   return state;
 }
@@ -156,7 +163,7 @@ function toggleLearnStatusThunk(db: Db, graph: GraphType, uids: string[]) {
 function quizItemThunk(db: Db, graph: GraphType, result: boolean, key: string, summary: string) {
   return async (dispatch: Dispatch) => {
     await web.updateQuiz(db, result, key, graph);
-    const action: QuizItem = {type: 'quizItem', ebisus: graph.ebisus};
+    const action: QuizItem = {type: 'quizItem', ebisus: graph.ebisus, summary};
     dispatch(action);
   }
 }
@@ -346,8 +353,12 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
 
 function Learn(props: {graph: GraphType, update: (result: boolean, key: string, summary: string) => any}) {
   const bestQuiz = whichToQuiz(props.graph);
-  if (bestQuiz) { return ce(AQuiz, {quiz: bestQuiz, update: props.update}) }
-  return ce('div', {}, 'Nothing learned to quiz!');
+  const component =
+      bestQuiz ? ce(AQuiz, {quiz: bestQuiz, update: props.update}) : ce('div', {}, 'Nothing learned to quiz!');
+  const quizSummaries = useSelector((state: State) => state.quizSummaries);
+  const quizLis = mapRight(quizSummaries, s => ce('li', {key: s}, FuriganaComponent({furiganaString: s})));
+  const summariesComponent = ce('ul', {}, quizLis);
+  return ce('div', {}, component, summariesComponent);
 }
 
 function App() {
