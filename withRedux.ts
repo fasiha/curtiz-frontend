@@ -31,7 +31,7 @@ Each synchronous action just needs a single action type.
 
 Just types, nothing else.
 */
-type Action = ReqDb|SaveDoc;
+type Action = ReqDb|SaveDoc|LearnItem;
 
 interface ReqDbBase {
   type: 'reqDb';
@@ -53,6 +53,11 @@ interface SaveDoc {
   type: 'saveDoc';
   oldDoc?: Doc;
   newDoc: Doc;
+}
+
+interface LearnItem {
+  type: 'learnItem';
+  ebisus: GraphType['ebisus'];
 }
 
 /*
@@ -88,9 +93,13 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
   } else if (action.type === 'saveDoc') {
     const {oldDoc, newDoc} = action;
     const docs = oldDoc ? state.docs.map(doc => doc === oldDoc ? newDoc : doc) : state.docs.concat(newDoc);
+    // create fresh graph nodes, edges, and raws from new doc(s), but! reuse ebisus since that doesn't change
     const graph: GraphType = {...emptyGraph(), ebisus: state.graph.ebisus};
     docs.forEach((doc, i) => {textToGraph(doc.content, graph)});
     return {...state, docs, graph};
+  } else if (action.type === 'learnItem') {
+    const graph = {...state.graph, ebisus: action.ebisus};
+    return {...state, graph};
   }
   return state;
 }
@@ -120,6 +129,21 @@ function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: str
     const newDoc: Doc = {...(oldDoc || {source: {type: 'manual', created: date}}), content, title, modified: date};
     await saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, newDoc, {date});
     const action: SaveDoc = {type: 'saveDoc', oldDoc, newDoc};
+    dispatch(action);
+  }
+}
+
+function toggleLearnStatusThunk(db: Db, graph: GraphType, uids: string[]) {
+  return async (dispatch: Dispatch) => {
+    const args = {ebisus: graph.ebisus};
+    for (const uid of uids) {
+      if (graph.ebisus.has(uid)) {
+        await web.unlearnQuizzes(db, [uid], args);
+      } else {
+        await web.learnQuizzes(db, [uid], args);
+      }
+    }
+    const action: LearnItem = {type: 'learnItem', ebisus: graph.ebisus};
     dispatch(action);
   }
 }
@@ -195,6 +219,8 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (key
   const li = ce('li'); // solely used to get type without hardcoding :P
   type Li = typeof li;
   const lis: Li[] = [];
+  const dispatch = useDispatch();
+
   for (const doc of props.docs) {
     const blocks = markdownToBlocks(doc.content);
     for (const [blocknum, block] of enumerate(blocks)) {
@@ -209,13 +235,7 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (key
                                                     : 'unknown';
           const buttons = quizs.map(q => q ? ce(
                                                  'button',
-                                                 {
-                                                   onClick: (e) => {
-                                                     //  e.persist();
-                                                     //  console.log(e);
-                                                     props.toggleLearnStatus([q.uniqueId]);
-                                                   }
-                                                 },
+                                                 {onClick: (e) => props.toggleLearnStatus([q.uniqueId])},
                                                  describe(q),
                                                  )
                                            : '');
@@ -241,16 +261,7 @@ function App() {
   const editorProps: EditorProps = {docs, saveDoc};
   const graphViewProps: GraphViewerProps = {graph};
   const toggleLearnStatus = (keys: string[]) => {
-    if (db && graph) {
-      const args = {ebisus: graph.ebisus};
-      for (const key of keys) {
-        if (graph.ebisus.has(key)) {
-          web.unlearnQuizzes(db, [key], args);
-        } else {
-          web.learnQuizzes(db, [key], args);
-        }
-      }
-    }
+    if (db) { dispatch(toggleLearnStatusThunk(db, graph, keys)); }
   };
   const showDocsProps = {graph, docs, toggleLearnStatus};
   return ce('div', null, ce(Editor, editorProps), ce(ShowDocs, showDocsProps), ce(GraphViewer, graphViewProps));
