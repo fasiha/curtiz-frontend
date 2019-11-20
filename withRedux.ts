@@ -1,5 +1,5 @@
 import {AbstractIterator} from 'abstract-leveldown';
-import {QuizGraph, textToGraph} from 'curtiz-parse-markdown';
+import {Quiz, QuizGraph, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu} from 'curtiz-quiz-planner';
 import {enumerate, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
@@ -191,7 +191,7 @@ function markdownToBlocks(md: string) {
   return headers;
 }
 
-function ShowDocs(props: {docs: Doc[], graph: GraphType}) {
+function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (keys: string[]) => void}) {
   const li = ce('li'); // solely used to get type without hardcoding :P
   type Li = typeof li;
   const lis: Li[] = [];
@@ -203,7 +203,23 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType}) {
         const furi = line.startsWith('- @furigana') ? FuriganaComponent({furiganaString: line}) : line;
         const key = [doc.title, blocknum, lino].join('/');
         if (uids) {
-          lis.push(ce('li', {key}, furi, ` (${uids.size} flashcards)`));
+          const quizs = Array.from(uids, uid => props.graph.nodes.get(uid));
+          const describe = (q: Quiz|undefined) => q ? ('subkind' in q ? `${q.subkind} ` : '') + q.kind +
+                                                          (props.graph.ebisus.has(q.uniqueId) ? ' unlearn' : ' learn')
+                                                    : 'unknown';
+          const buttons = quizs.map(q => q ? ce(
+                                                 'button',
+                                                 {
+                                                   onClick: (e) => {
+                                                     //  e.persist();
+                                                     //  console.log(e);
+                                                     props.toggleLearnStatus([q.uniqueId]);
+                                                   }
+                                                 },
+                                                 describe(q),
+                                                 )
+                                           : '');
+          lis.push(ce('li', {key}, furi, ...buttons));
         } else {
           lis.push(ce('li', {key}, furi));
         }
@@ -224,7 +240,20 @@ function App() {
 
   const editorProps: EditorProps = {docs, saveDoc};
   const graphViewProps: GraphViewerProps = {graph};
-  return ce('div', null, ce(Editor, editorProps), ce(ShowDocs, {graph, docs}), ce(GraphViewer, graphViewProps));
+  const toggleLearnStatus = (keys: string[]) => {
+    if (db && graph) {
+      const args = {ebisus: graph.ebisus};
+      for (const key of keys) {
+        if (graph.ebisus.has(key)) {
+          web.unlearnQuizzes(db, [key], args);
+        } else {
+          web.learnQuizzes(db, [key], args);
+        }
+      }
+    }
+  };
+  const showDocsProps = {graph, docs, toggleLearnStatus};
+  return ce('div', null, ce(Editor, editorProps), ce(ShowDocs, showDocsProps), ce(GraphViewer, graphViewProps));
 }
 
 // Render!
