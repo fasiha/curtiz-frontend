@@ -1,19 +1,20 @@
-import {AbstractIterator} from 'abstract-leveldown';
+import {AbstractBatch, AbstractIterator, AbstractIteratorOptions} from 'abstract-leveldown';
 import {Quiz, QuizGraph, QuizKind, textToGraph} from 'curtiz-parse-markdown';
 import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner';
 import {enumerate, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
+import {Gatty, setup, sync} from 'isomorphic-gatty';
 import {Furigana, furiganaToString, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
 import React, {useMemo, useRef, useState} from 'react';
 import ReactDOM from 'react-dom';
 import {Provider, useDispatch, useSelector} from 'react-redux';
-import {applyMiddleware, createStore, Dispatch} from 'redux';
+import {applyMiddleware, createStore} from 'redux';
 import {createLogger} from 'redux-logger';
-import thunkMiddleware from 'redux-thunk';
+import thunkMiddleware, {ThunkAction} from 'redux-thunk';
 
-import {Doc, DOCS_PREFIX, loadDocs, saveDoc} from './docs';
+import {Doc, DOCS_PREFIX, EventDoc, loadDocs, saveDoc} from './docs';
 
 export type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu; // ebisus, nodes, edges, raws
@@ -31,7 +32,7 @@ Each synchronous action just needs a single action type.
 
 Just types, nothing else.
 */
-type Action = ReqDb|SaveDoc|LearnItem|QuizItem;
+type Action = ReqDb|SaveDoc|LearnItem|QuizItem|LoginAction|Sync;
 
 interface ReqDbBase {
   type: 'reqDb';
@@ -66,6 +67,18 @@ interface QuizItem {
   summary: string;
 }
 
+interface LoginAction {
+  type: 'login';
+  gatty: Gatty;
+}
+
+interface Sync {
+  type: 'sync';
+  newSharedUid: string;
+  newgraph?: GraphType;
+  newdocs?: Doc[];
+}
+
 /*
 # Step 2. Define your state type and initial state.
 */
@@ -75,6 +88,8 @@ interface State {
   docs: Doc[];
   graph: GraphType;
   quizSummaries: string[];
+  gatty?: Gatty;
+  lastSharedUid: string;
 }
 
 const INITIAL_STATE: State = {
@@ -83,6 +98,7 @@ const INITIAL_STATE: State = {
   docs: [],
   graph: emptyGraph(),
   quizSummaries: [],
+  lastSharedUid: '',
 };
 
 /*
@@ -112,6 +128,13 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     const graph = {...state.graph, ebisus: action.ebisus};
     const quizSummaries = state.quizSummaries.concat(action.summary);
     return {...state, graph, quizSummaries};
+  } else if (action.type === 'login') {
+    return {...state, gatty: action.gatty};
+  } else if (action.type === 'sync') {
+    const {newSharedUid, newgraph, newdocs} = action;
+    const graph: GraphType = newgraph || state.graph;
+    const docs: Doc[] = newdocs || state.docs;
+    return {...state, lastSharedUid: newSharedUid, graph, docs};
   }
   return state;
 }
@@ -119,8 +142,10 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
 /*
 # Step 4. Create thunk creator actions. You can `dispatch` the output of this function.
 */
-function initdb(dbName: string) {
-  return async (dispatch: Dispatch) => {
+type ThunkResult<R> = ThunkAction<R, State, undefined, Action>;
+
+function initdb(dbName: string): ThunkResult<void> {
+  return async (dispatch) => {
     {
       const started: ReqDbStarted = {type: 'reqDb', status: 'started', dbName};
       dispatch(started);
@@ -135,8 +160,8 @@ function initdb(dbName: string) {
   }
 }
 
-function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: string, date?: Date) {
-  return async (dispatch: Dispatch) => {
+function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: string, date?: Date): ThunkResult<void> {
+  return async (dispatch) => {
     date = date || new Date();
     const newDoc: Doc = {...(oldDoc || {source: {type: 'manual', created: date}}), content, title, modified: date};
     await saveDoc(db, DOCS_PREFIX, web.EVENT_PREFIX, newDoc, {date});
@@ -145,8 +170,8 @@ function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: str
   }
 }
 
-function toggleLearnStatusThunk(db: Db, graph: GraphType, uids: string[]) {
-  return async (dispatch: Dispatch) => {
+function toggleLearnStatusThunk(db: Db, graph: GraphType, uids: string[]): ThunkResult<void> {
+  return async (dispatch) => {
     const args = {ebisus: graph.ebisus};
     for (const uid of uids) {
       if (graph.ebisus.has(uid)) {
@@ -159,12 +184,111 @@ function toggleLearnStatusThunk(db: Db, graph: GraphType, uids: string[]) {
     dispatch(action);
   }
 }
-
-function quizItemThunk(db: Db, graph: GraphType, result: boolean, key: string, summary: string) {
-  return async (dispatch: Dispatch) => {
+function quizItemThunk(db: Db, graph: GraphType, result: boolean, key: string, summary: string): ThunkResult<void> {
+  return async (dispatch) => {
     await web.updateQuiz(db, result, key, graph);
     const action: QuizItem = {type: 'quizItem', ebisus: graph.ebisus, summary};
     dispatch(action);
+  }
+}
+
+function loginThunk({username, url, token}: {username: string, url: string, token: string}): ThunkResult<void> {
+  return async (dispatch, getState) => {
+    const gatty = await setup({corsProxy: 'https://cors.isomorphic-git.org', username, token}, url);
+    const action: LoginAction = {type: 'login', gatty};
+    dispatch(action);
+
+    let lastSharedUid = '';
+    const {db, graph, docs} = getState();
+    if (db) {
+      try {
+        lastSharedUid = await db.get('lastSharedUid', {asBuffer: false});
+      } catch (e) { await db.put('lastSharedUid', ''); }
+      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
+    }
+  }
+}
+
+type CurtizEvent = web.EventLearn|web.EventUnlearn|web.EventUpdate|EventDoc;
+async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: string, gatty?: Gatty) {
+  // console.log('in SYNCER initial', {db, gatty, lastSharedUid});
+  if (gatty && db) {
+    const opts:
+        AbstractIteratorOptions<string> = {gt: web.EVENT_PREFIX + lastSharedUid, lt: web.EVENT_PREFIX + '\ufe0f'};
+    const res = await web.summarizeDb(db, opts);
+    // console.log('BEFORE sync, in syncer', {res, lastSharedUid});
+    const {newEvents, newSharedUid} =
+        await sync(gatty, lastSharedUid, res.map(o => o.value.uid), res.map(o => JSON.stringify(o.value)));
+    // console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
+
+    // if something recent was shared, or something old synced only now:
+
+    if (newSharedUid !== lastSharedUid || newEvents.length) {
+      const syncAction: Sync = {type: 'sync', newSharedUid};
+      const events: CurtizEvent[] = newEvents.map(s => JSON.parse(s[1]));
+      const batch: AbstractBatch[] = [{type: 'put', key: 'lastSharedUid', value: newSharedUid}];
+      const newDocs: Map<string, Doc> = new Map();
+      {
+        const dbKeyToBatch: Map<string, AbstractBatch> = new Map([]);
+        for (const e of events) {
+          // event should be committed to local db as is
+          batch.push({type: 'put', key: web.EVENT_PREFIX + e.uid, value: e});
+          // local db should update the things the events talk about too!
+          if (e.action === 'learn' || e.action === 'update') {
+            const key = web.EBISU_PREFIX + e.key;
+            dbKeyToBatch.set(key, {type: 'put', key, value: e.ebisu});
+          } else if (e.action === 'doc') {
+            const key = DOCS_PREFIX + e.doc.title;
+            dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
+            newDocs.set(e.doc.title, e.doc);
+          } else if (e.action === 'unlearn') {
+            const key = web.EBISU_PREFIX + e.key;
+            dbKeyToBatch.set(key, {type: 'del', key});
+          } else {
+            throw new Error('unhandled event action');
+          }
+        }
+        for (const value of dbKeyToBatch.values()) { batch.push(value); }
+      }
+      await db.batch(batch);
+      if (graph && batch.length) {
+        const newGraph: GraphType = {
+          ebisus: new Map(graph.ebisus),
+          edges: new Map(graph.edges),
+          nodes: new Map(graph.nodes),
+          raws: new Map(graph.raws),
+        };
+        for (const doc of newDocs.values()) { textToGraph(doc.content, newGraph); }
+        const finalGraph: GraphType = {...newGraph, ...await web.loadEbisus(db)};
+
+        const newDocsArr = docs.slice();
+        for (const [k, v] of newDocs) {
+          const didx = newDocsArr.findIndex(doc => doc.title === k);
+          if (didx >= 0) {
+            newDocsArr.splice(didx, 1, v);
+          } else {
+            newDocsArr.push(v);
+          }
+        }
+        // setGraph(finalGraph);
+        // setDocs(newDocsArr);
+        syncAction.newdocs = newDocsArr;
+        syncAction.newgraph = finalGraph;
+      }
+      // setLastSharedUid(newSharedUid);
+      syncAction.newSharedUid = newSharedUid;
+      return syncAction;
+    }
+  }
+}
+function syncThunk(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: string, gatty?: Gatty): ThunkResult<void> {
+  return async (dispatch) => {
+    const action = await syncer(db, graph, docs, lastSharedUid, gatty);
+    if (action) {
+      dispatch(action);
+    } else {
+      return;
+    }
   }
 }
 
@@ -225,7 +349,6 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (key
   const li = ce('li'); // solely used to get type without hardcoding :P
   type Li = typeof li;
   const lis: Li[] = [];
-  const dispatch = useDispatch();
 
   for (const doc of props.docs) {
     const blocks = markdownToBlocks(doc.content);
@@ -361,27 +484,93 @@ function Learn(props: {graph: GraphType, update: (result: boolean, key: string, 
   return ce('div', {}, component, summariesComponent);
 }
 
+function Login(props: {}) {
+  const [url, setURL] = useState('');
+  const [username, setUsername] = useState('');
+  const [token, setToken] = useState('');
+  const dispatch = useDispatch();
+
+  const gatty = useSelector((state: State) => state.gatty);
+  if (gatty) { return ce('div', {}, 'Logged in! Refresh to log out.'); }
+
+  return ce(
+      'div',
+      null,
+      ce(
+          'form',
+          {
+            onSubmit: (e: any) => {
+              e.preventDefault();
+              dispatch(loginThunk({username, url, token}));
+            }
+          },
+          ce(
+              'div',
+              {className: 'input-group'},
+              ce('label', null, 'Username'),
+              ce('input', {
+                type: 'text',
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                value: username,
+                onChange: e => setUsername(e.target.value)
+              }),
+              ),
+          ce(
+              'div',
+              {className: 'input-group'},
+              ce('label', null, 'URL'),
+              ce('input', {
+                type: 'text',
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                value: url,
+                onChange: e => setURL(e.target.value)
+              }),
+              ),
+          ce(
+              'div',
+              {className: 'input-group'},
+              ce('label', null, 'Token'),
+              ce('input', {type: 'password', value: token, onChange: e => setToken(e.target.value)}),
+              ),
+          ce('input', {type: 'submit', value: 'Login'}),
+          ),
+  );
+}
+
 function App() {
-  const {db, docs, dbLoading, graph} =
-      useSelector(({db, docs, dbLoading, graph}: State) => ({db, docs, dbLoading, graph}));
+  const {db, docs, dbLoading, graph, lastSharedUid, gatty} =
+      useSelector(({db, docs, dbLoading, graph, lastSharedUid, gatty}: State) =>
+                      ({db, docs, dbLoading, graph, lastSharedUid, gatty}));
   const dispatch = useDispatch();
   if (!db && !dbLoading) { dispatch(initdb('testing')) }
   const saveDoc: SaveDocType = (doc: Doc|undefined, contents: string, title: string, date?: Date) => {
-    if (db) { dispatch(saveDocThunk(db, doc, contents, title, date)); }
+    if (db) {
+      dispatch(saveDocThunk(db, doc, contents, title, date));
+      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
+    }
   };
 
   const editorProps: EditorProps = {docs, saveDoc};
   const update = (result: boolean, key: string, summary: string) => {
-    if (db) { dispatch(quizItemThunk(db, graph, result, key, summary)); }
+    if (db) {
+      dispatch(quizItemThunk(db, graph, result, key, summary));
+      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
+    }
   };
   const learnProps = {graph, update};
   const toggleLearnStatus = (keys: string[]) => {
-    if (db) { dispatch(toggleLearnStatusThunk(db, graph, keys)); }
+    if (db) {
+      dispatch(toggleLearnStatusThunk(db, graph, keys));
+      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
+    }
   };
   const showDocsProps = {graph, docs, toggleLearnStatus};
   return ce(
       'div',
       null,
+      ce(Login),
       ce(Editor, editorProps),
       ce(Learn, learnProps),
       ce(ShowDocs, showDocsProps),
