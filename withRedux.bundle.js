@@ -134,8 +134,112 @@ function _objectWithoutPropertiesLoose(source, excluded) {
 
 module.exports = _objectWithoutPropertiesLoose;
 },{}],6:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, '__esModule', { value: true });
+
+class Store {
+    constructor(dbName = 'keyval-store', storeName = 'keyval') {
+        this.storeName = storeName;
+        this._dbName = dbName;
+        this._storeName = storeName;
+        this._init();
+    }
+    _init() {
+        if (this._dbp) {
+            return;
+        }
+        this._dbp = new Promise((resolve, reject) => {
+            const openreq = indexedDB.open(this._dbName, 1);
+            openreq.onerror = () => reject(openreq.error);
+            openreq.onsuccess = () => resolve(openreq.result);
+            // First time setup: create an empty object store
+            openreq.onupgradeneeded = () => {
+                openreq.result.createObjectStore(this._storeName);
+            };
+        });
+    }
+    _withIDBStore(type, callback) {
+        this._init();
+        return this._dbp.then(db => new Promise((resolve, reject) => {
+            const transaction = db.transaction(this.storeName, type);
+            transaction.oncomplete = () => resolve();
+            transaction.onabort = transaction.onerror = () => reject(transaction.error);
+            callback(transaction.objectStore(this.storeName));
+        }));
+    }
+    _close() {
+        this._init();
+        return this._dbp.then(db => {
+            db.close();
+            this._dbp = undefined;
+        });
+    }
+}
+let store;
+function getDefaultStore() {
+    if (!store)
+        store = new Store();
+    return store;
+}
+function get(key, store = getDefaultStore()) {
+    let req;
+    return store._withIDBStore('readwrite', store => {
+        req = store.get(key);
+    }).then(() => req.result);
+}
+function set(key, value, store = getDefaultStore()) {
+    return store._withIDBStore('readwrite', store => {
+        store.put(value, key);
+    });
+}
+function update(key, updater, store = getDefaultStore()) {
+    return store._withIDBStore('readwrite', store => {
+        const req = store.get(key);
+        req.onsuccess = () => {
+            store.put(updater(req.result), key);
+        };
+    });
+}
+function del(key, store = getDefaultStore()) {
+    return store._withIDBStore('readwrite', store => {
+        store.delete(key);
+    });
+}
+function clear(store = getDefaultStore()) {
+    return store._withIDBStore('readwrite', store => {
+        store.clear();
+    });
+}
+function keys(store = getDefaultStore()) {
+    const keys = [];
+    return store._withIDBStore('readwrite', store => {
+        // This would be store.getAllKeys(), but it isn't supported by Edge or Safari.
+        // And openKeyCursor isn't supported by Safari.
+        (store.openKeyCursor || store.openCursor).call(store).onsuccess = function () {
+            if (!this.result)
+                return;
+            keys.push(this.result.key);
+            this.result.continue();
+        };
+    }).then(() => keys);
+}
+function close(store = getDefaultStore()) {
+    return store._close();
+}
+
+exports.Store = Store;
+exports.get = get;
+exports.set = set;
+exports.update = update;
+exports.del = del;
+exports.clear = clear;
+exports.keys = keys;
+exports.close = close;
+
+},{}],7:[function(require,module,exports){
 const path = require("./path.js");
-const { ENOENT, EEXIST, ENOTEMPTY } = require("./errors.js");
+const { EEXIST, ENOENT, ENOTDIR, ENOTEMPTY } = require("./errors.js");
 
 const STAT = 0;
 
@@ -244,17 +348,16 @@ module.exports = class CacheFS {
   _lookup(filepath, follow = true) {
     let dir = this._root;
     let partialPath = '/'
-    for (let part of path.split(filepath)) {
+    let parts = path.split(filepath)
+    for (let i = 0; i < parts.length; ++ i) {
+      let part = parts[i];
       dir = dir.get(part);
       if (!dir) throw new ENOENT(filepath);
       // Follow symlinks
-      if (follow) {
+      if (follow || i < parts.length - 1) {
         const stat = dir.get(STAT)
         if (stat.type === 'symlink') {
-          let target = stat.target
-          if (!target.startsWith('/')) {
-            target = path.normalize(path.join(partialPath, target))
-          }
+          let target = path.resolve(partialPath, stat.target)
           dir = this._lookup(target)
         }
         if (!partialPath) {
@@ -285,8 +388,10 @@ module.exports = class CacheFS {
     dir.set(basename, entry);
   }
   rmdir(filepath) {
+    let dir = this._lookup(filepath);
+    if (dir.get(STAT).type !== 'dir') throw new ENOTDIR();
     // check it's empty (size should be 1 for just StatSym)
-    if (this._lookup(filepath).size > 1) throw new ENOTEMPTY();
+    if (dir.size > 1) throw new ENOTEMPTY();
     // remove from parent
     let parent = this._lookup(path.dirname(filepath));
     let basename = path.basename(filepath);
@@ -294,13 +399,14 @@ module.exports = class CacheFS {
   }
   readdir(filepath) {
     let dir = this._lookup(filepath);
+    if (dir.get(STAT).type !== 'dir') throw new ENOTDIR();
     return [...dir.keys()].filter(key => typeof key === "string");
   }
-  writeFile(filepath, data, { mode }) {
+  writeStat(filepath, size, { mode }) {
     let ino;
     try {
       let oldStat = this.stat(filepath);
-      if (mode === null) {
+      if (mode == null) {
         mode = oldStat.mode;
       }
       ino = oldStat.ino;
@@ -316,7 +422,7 @@ module.exports = class CacheFS {
     let stat = {
       mode,
       type: "file",
-      size: data.length,
+      size,
       mtimeMs: Date.now(),
       ino,
     };
@@ -384,13 +490,13 @@ module.exports = class CacheFS {
   }
 };
 
-},{"./errors.js":13,"./path.js":15}],7:[function(require,module,exports){
+},{"./errors.js":14,"./path.js":16}],8:[function(require,module,exports){
 module.exports = class HttpBackend {
   constructor(url) {
     this._url = url;
   }
   loadSuperblock() {
-    return fetch(this._url + '/.superblock.txt').then(res => res.text())
+    return fetch(this._url + '/.superblock.txt').then(res => res.ok ? res.text() : null)
   }
   async readFile(filepath) {
     const res = await fetch(this._url + filepath)
@@ -400,10 +506,18 @@ module.exports = class HttpBackend {
       throw new Error('ENOENT')
     }
   }
+  async sizeFile(filepath) {
+    const res = await fetch(this._url + filepath, { method: 'HEAD' })
+    if (res.status === 200) {
+      return res.headers.get('content-length')
+    } else {
+      throw new Error('ENOENT')
+    }
+  }
 }
 
-},{}],8:[function(require,module,exports){
-const idb = require("@wmhilton/idb-keyval");
+},{}],9:[function(require,module,exports){
+const idb = require("@isomorphic-git/idb-keyval");
 
 module.exports = class IdbBackend {
   constructor(name) {
@@ -433,8 +547,8 @@ module.exports = class IdbBackend {
   }
 }
 
-},{"@wmhilton/idb-keyval":16}],9:[function(require,module,exports){
-const idb = require("@wmhilton/idb-keyval");
+},{"@isomorphic-git/idb-keyval":6}],10:[function(require,module,exports){
+const idb = require("@isomorphic-git/idb-keyval");
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
@@ -529,7 +643,7 @@ module.exports = class Mutex {
   }
 }
 
-},{"@wmhilton/idb-keyval":16}],10:[function(require,module,exports){
+},{"@isomorphic-git/idb-keyval":6}],11:[function(require,module,exports){
 const { encode, decode } = require("isomorphic-textencoder");
 const debounce = require("just-debounce-it");
 
@@ -565,7 +679,7 @@ function cleanParams2(oldFilepath, newFilepath) {
 }
 
 module.exports = class PromisifiedFS {
-  constructor(name, { wipe, url } = {}) {
+  constructor(name, { wipe, url, urlauto } = {}) {
     this._name = name
     this._idb = new IdbBackend(name);
     this._mutex = new Mutex(name);
@@ -577,6 +691,7 @@ module.exports = class PromisifiedFS {
     }, 500);
     if (url) {
       this._http = new HttpBackend(url)
+      this._urlauto = !!urlauto
     }
     this._operations = new Set()
 
@@ -591,6 +706,7 @@ module.exports = class PromisifiedFS {
     this.lstat = this._wrap(this.lstat, false)
     this.readlink = this._wrap(this.readlink, false)
     this.symlink = this._wrap(this.symlink, true)
+    this.backFile = this._wrap(this.backFile, true)
 
     this._deactivationPromise = null
     this._deactivationTimeout = null
@@ -675,18 +791,46 @@ module.exports = class PromisifiedFS {
       await this._idb.saveSuperblock(this._cache._root);
     }
   }
+  async _writeStat(filepath, size, opts) {
+    let dirparts = path.split(path.dirname(filepath))
+    let dir = dirparts.shift()
+    for (let dirpart of dirparts) {
+      dir = path.join(dir, dirpart)
+      try {
+        this._cache.mkdir(dir, { mode: 0o777 })
+      } catch (e) {}
+    }
+    return this._cache.writeStat(filepath, size, opts)
+  }
   async readFile(filepath, opts) {
     ;[filepath, opts] = cleanParams(filepath, opts);
     const { encoding } = opts;
     if (encoding && encoding !== 'utf8') throw new Error('Only "utf8" encoding is supported in readFile');
-    const stat = this._cache.stat(filepath);
-    let data = await this._idb.readFile(stat.ino)
+    let data = null, stat = null
+    try {
+      stat = this._cache.stat(filepath);
+      data = await this._idb.readFile(stat.ino)
+    } catch (e) {
+      if (!this._urlauto) throw e
+    }
     if (!data && this._http) {
+      let lstat = this._cache.lstat(filepath)
+      while (lstat.type === 'symlink') {
+        filepath = path.resolve(path.dirname(filepath), lstat.target)
+        lstat = this._cache.lstat(filepath)
+      }
       data = await this._http.readFile(filepath)
     }
-    if (data && encoding === "utf8") {
-      data = decode(data);
+    if (data) {
+      if (!stat || stat.size != data.byteLength) {
+        stat = await this._writeStat(filepath, data.byteLength, { mode: stat ? stat.mode : 0o666 })
+        this.saveSuperblock() // debounced
+      }
+      if (encoding === "utf8") {
+        data = decode(data);
+      }
     }
+    if (!stat) throw new ENOENT(filepath)
     return data;
   }
   async writeFile(filepath, data, opts) {
@@ -698,15 +842,17 @@ module.exports = class PromisifiedFS {
       }
       data = encode(data);
     }
-    const stat = this._cache.writeFile(filepath, data, { mode });
+    const stat = await this._cache.writeStat(filepath, data.byteLength, { mode });
     await this._idb.writeFile(stat.ino, data)
     return null
   }
   async unlink(filepath, opts) {
     ;[filepath, opts] = cleanParams(filepath, opts);
-    const stat = this._cache.stat(filepath);
+    const stat = this._cache.lstat(filepath);
     this._cache.unlink(filepath);
-    await this._idb.unlink(stat.ino)
+    if (stat.type !== 'symlink') {
+      await this._idb.unlink(stat.ino)
+    }
     return null
   }
   async readdir(filepath, opts) {
@@ -752,9 +898,15 @@ module.exports = class PromisifiedFS {
     this._cache.symlink(target, filepath);
     return null;
   }
+  async backFile(filepath, opts) {
+    ;[filepath, opts] = cleanParams(filepath, opts);
+    let size = await this._http.sizeFile(filepath)
+    await this._writeStat(filepath, size, opts)
+    return null
+  }
 }
 
-},{"./CacheFS.js":6,"./HttpBackend.js":7,"./IdbBackend.js":8,"./Mutex.js":9,"./Stat.js":11,"./clock.js":12,"./errors.js":13,"./path.js":15,"isomorphic-textencoder":108,"just-debounce-it":110}],11:[function(require,module,exports){
+},{"./CacheFS.js":7,"./HttpBackend.js":8,"./IdbBackend.js":9,"./Mutex.js":10,"./Stat.js":12,"./clock.js":13,"./errors.js":14,"./path.js":16,"isomorphic-textencoder":108,"just-debounce-it":110}],12:[function(require,module,exports){
 module.exports = class Stat {
   constructor(stats) {
     this.type = stats.type;
@@ -778,7 +930,7 @@ module.exports = class Stat {
   }
 };
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 module.exports = function clock(name) {
   performance.mark(`${name} start`);
   return function stopClock() {
@@ -787,7 +939,7 @@ module.exports = function clock(name) {
   };
 };
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 function Err(name) {
   return class extends Error {
     constructor(...args) {
@@ -804,11 +956,12 @@ function Err(name) {
 
 const EEXIST = Err("EEXIST");
 const ENOENT = Err("ENOENT");
+const ENOTDIR = Err("ENOTDIR");
 const ENOTEMPTY = Err("ENOTEMPTY");
 
-module.exports = { EEXIST, ENOENT, ENOTEMPTY };
+module.exports = { EEXIST, ENOENT, ENOTDIR, ENOTEMPTY };
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 const once = require("just-once");
 
 const PromisifiedFS = require('./PromisifiedFS');
@@ -837,6 +990,7 @@ module.exports = class FS {
     this.lstat = this.lstat.bind(this)
     this.readlink = this.readlink.bind(this)
     this.symlink = this.symlink.bind(this)
+    this.backFile = this.backFile.bind(this)
   }
   readFile(filepath, opts, cb) {
     const [resolve, reject] = wrapCallback(opts, cb);
@@ -882,9 +1036,13 @@ module.exports = class FS {
     const [resolve, reject] = wrapCallback(cb);
     this.promises.symlink(target, filepath).then(resolve).catch(reject);
   }
+  backFile(filepath, opts, cb) {
+    const [resolve, reject] = wrapCallback(opts, cb);
+    this.promises.backFile(filepath, opts).then(resolve).catch(reject);
+  }
 }
 
-},{"./PromisifiedFS":10,"just-once":111}],15:[function(require,module,exports){
+},{"./PromisifiedFS":11,"just-once":111}],16:[function(require,module,exports){
 function normalizePath(path) {
   if (path.length === 0) {
     return ".";
@@ -892,6 +1050,18 @@ function normalizePath(path) {
   let parts = splitPath(path);
   parts = parts.reduce(reducer, []);
   return joinPath(...parts);
+}
+
+function resolvePath(...paths) {
+  let result = '';
+  for (let path of paths) {
+    if (path.startsWith('/')) {
+      result = path;
+    } else {
+      result = normalizePath(joinPath(result, path));
+    }
+  }
+  return result;
 }
 
 function joinPath(...parts) {
@@ -978,111 +1148,8 @@ module.exports = {
   split: splitPath,
   basename,
   dirname,
+  resolve: resolvePath,
 };
-
-},{}],16:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, '__esModule', { value: true });
-
-class Store {
-    constructor(dbName = 'keyval-store', storeName = 'keyval') {
-        this.storeName = storeName;
-        this._dbName = dbName;
-        this._storeName = storeName;
-        this._init();
-    }
-    _init() {
-        if (this._dbp) {
-            return;
-        }
-        this._dbp = new Promise((resolve, reject) => {
-            const openreq = indexedDB.open(this._dbName, 1);
-            openreq.onerror = () => reject(openreq.error);
-            openreq.onsuccess = () => resolve(openreq.result);
-            // First time setup: create an empty object store
-            openreq.onupgradeneeded = () => {
-                openreq.result.createObjectStore(this._storeName);
-            };
-        });
-    }
-    _withIDBStore(type, callback) {
-        this._init();
-        return this._dbp.then(db => new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, type);
-            transaction.oncomplete = () => resolve();
-            transaction.onabort = transaction.onerror = () => reject(transaction.error);
-            callback(transaction.objectStore(this.storeName));
-        }));
-    }
-    _close() {
-        this._init();
-        return this._dbp.then(db => {
-            db.close();
-            this._dbp = undefined;
-        });
-    }
-}
-let store;
-function getDefaultStore() {
-    if (!store)
-        store = new Store();
-    return store;
-}
-function get(key, store = getDefaultStore()) {
-    let req;
-    return store._withIDBStore('readonly', store => {
-        req = store.get(key);
-    }).then(() => req.result);
-}
-function set(key, value, store = getDefaultStore()) {
-    return store._withIDBStore('readwrite', store => {
-        store.put(value, key);
-    });
-}
-function update(key, updater, store = getDefaultStore()) {
-    return store._withIDBStore('readwrite', store => {
-        const req = store.get(key);
-        req.onsuccess = () => {
-            store.put(updater(req.result), key);
-        };
-    });
-}
-function del(key, store = getDefaultStore()) {
-    return store._withIDBStore('readwrite', store => {
-        store.delete(key);
-    });
-}
-function clear(store = getDefaultStore()) {
-    return store._withIDBStore('readwrite', store => {
-        store.clear();
-    });
-}
-function keys(store = getDefaultStore()) {
-    const keys = [];
-    return store._withIDBStore('readonly', store => {
-        // This would be store.getAllKeys(), but it isn't supported by Edge or Safari.
-        // And openKeyCursor isn't supported by Safari.
-        (store.openKeyCursor || store.openCursor).call(store).onsuccess = function () {
-            if (!this.result)
-                return;
-            keys.push(this.result.key);
-            this.result.continue();
-        };
-    }).then(() => keys);
-}
-function close(store = getDefaultStore()) {
-    return store._close();
-}
-
-exports.Store = Store;
-exports.get = get;
-exports.set = set;
-exports.update = update;
-exports.del = del;
-exports.clear = clear;
-exports.keys = keys;
-exports.close = close;
 
 },{}],17:[function(require,module,exports){
 function AbstractChainedBatch (db) {
@@ -7639,9 +7706,9 @@ exports.groupBy = groupBy;
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 let hiragana = "ぁあぃいぅうぇえぉおかがきぎくぐけげこごさざしじすずせぜそぞただちぢっつづてでとどなに" +
-    "ぬねのはばぱひびぴふぶぷへべぺほぼまみむめもゃやゅゆょよらりるれろゎわゐゑをんゔゕゖ";
+    "ぬねのはばぱひびぴふぶぷへべぺほぼぽまみむめもゃやゅゆょよらりるれろゎわゐゑをんゔゕゖ";
 let katakana = "ァアィイゥウェエォオカガキギクグケゲコゴサザシジスズセゼソゾタダチヂッツヅテデトドナニ" +
-    "ヌネノハバパヒビピフブプヘベペホボマミムメモャヤュユョヨラリルレロヮワヰヱヲンヴヵヶ";
+    "ヌネノハバパヒビピフブプヘベペホボポマミムメモャヤュユョヨラリルレロヮワヰヱヲンヴヵヶ";
 if (hiragana.length !== katakana.length) {
     throw new Error('Kana strings not same length?');
 }
@@ -11354,6 +11421,10 @@ function sync(gatty, lastSharedUid, uids, events, maxRetries = 3) {
                 return { newSharedUid, newEvents };
             }
             catch (pushed) {
+                {
+                    const log = yield git.log({ dir });
+                    console.error('Push failed', { pushed, log, staged });
+                }
                 // if push failed, roll back commit and retry, up to some maximum
                 const branch = (yield git.currentBranch({ dir })) || 'master';
                 yield gitReset({ pfs, git, dir, ref: 'HEAD~1', branch, hard: true, cached: false });
@@ -11394,7 +11465,7 @@ ${contents[idx]}`);
 }
 exports.inspect = inspect;
 
-},{"@isomorphic-git/lightning-fs":14,"filenamify":71,"isomorphic-git":92}],92:[function(require,module,exports){
+},{"@isomorphic-git/lightning-fs":15,"filenamify":71,"isomorphic-git":92}],92:[function(require,module,exports){
 (function (process,Buffer){
 'use strict';
 
@@ -66946,6 +67017,14 @@ function summarizeThunk() {
         }
     });
 }
+function resetThunk() {
+    return (dispatch, getState) => __awaiter(this, void 0, void 0, function* () {
+        const { db } = getState();
+        if (db) {
+            yield db.put('lastSharedUid', '');
+        }
+    });
+}
 /*
 # Step 5. Create the store.
 */
@@ -67136,6 +67215,10 @@ function SyncButton() {
     }
     return ce('div', {}, '');
 }
+function ResetRemote() {
+    const dispatch = react_redux_1.useDispatch();
+    return ce('button', { onClick: () => dispatch(resetThunk()) }, 'Reset');
+}
 function App() {
     const { db, docs, dbLoading, graph, lastSharedUid, gatty } = react_redux_1.useSelector(({ db, docs, dbLoading, graph, lastSharedUid, gatty }) => ({ db, docs, dbLoading, graph, lastSharedUid, gatty }));
     const dispatch = react_redux_1.useDispatch();
@@ -67163,7 +67246,7 @@ function App() {
         }
     };
     const showDocsProps = { graph, docs, toggleLearnStatus };
-    return ce('div', null, ce(Login), ce(Editor, editorProps), ce(Learn, learnProps), ce(ShowDocs, showDocsProps));
+    return ce('div', null, ce(Login), ce(ResetRemote), ce(Editor, editorProps), ce(Learn, learnProps), ce(ShowDocs, showDocsProps));
 }
 // Render!
 react_dom_1.default.render(ce(react_redux_1.Provider, { store: store }, ce(App)), document.getElementById('root'));

@@ -308,6 +308,13 @@ function summarizeThunk(): ThunkResult<void> {
   };
 }
 
+function resetThunk(): ThunkResult<void> {
+  return async (dispatch, getState) => {
+    const {db} = getState();
+    if (db) { await db.put('lastSharedUid', ''); }
+  }
+}
+
 /*
 # Step 5. Create the store.
 */
@@ -570,6 +577,10 @@ function SyncButton() {
   }
   return ce('div', {}, '');
 }
+function ResetRemote() {
+  const dispatch = useDispatch();
+  return ce('button', {onClick: () => dispatch(resetThunk())}, 'Reset');
+}
 
 function App() {
   const {db, docs, dbLoading, graph, lastSharedUid, gatty} =
@@ -603,6 +614,7 @@ function App() {
       'div',
       null,
       ce(Login),
+      ce(ResetRemote),
       ce(Editor, editorProps),
       ce(Learn, learnProps),
       ce(ShowDocs, showDocsProps),
