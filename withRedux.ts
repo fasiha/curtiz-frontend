@@ -32,7 +32,7 @@ Each synchronous action just needs a single action type.
 
 Just types, nothing else.
 */
-type Action = ReqDb|SaveDoc|LearnItem|QuizItem|LoginAction|Sync;
+type Action = ReqDb|SaveDoc|LearnItem|QuizItem|LoginAction|Sync|Summary;
 
 interface ReqDbBase {
   type: 'reqDb';
@@ -79,6 +79,11 @@ interface Sync {
   newdocs?: Doc[];
 }
 
+interface Summary {
+  type: 'summary';
+  summary: any;
+}
+
 /*
 # Step 2. Define your state type and initial state.
 */
@@ -90,6 +95,7 @@ interface State {
   quizSummaries: string[];
   gatty?: Gatty;
   lastSharedUid: string;
+  summary?: any;
 }
 
 const INITIAL_STATE: State = {
@@ -135,6 +141,8 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     const graph: GraphType = newgraph || state.graph;
     const docs: Doc[] = newdocs || state.docs;
     return {...state, lastSharedUid: newSharedUid, graph, docs};
+  } else if (action.type === 'summary') {
+    return {...state, summary: action.summary};
   }
   return state;
 }
@@ -157,6 +165,7 @@ function initdb(dbName: string): ThunkResult<void> {
       const done: ReqDbFinished = {type: 'reqDb', status: 'finished', dbName, db, docs, ebisus};
       dispatch(done);
     }
+    dispatch(summarizeThunk());
   }
 }
 
@@ -284,12 +293,19 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
 function syncThunk(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: string, gatty?: Gatty): ThunkResult<void> {
   return async (dispatch) => {
     const action = await syncer(db, graph, docs, lastSharedUid, gatty);
-    if (action) {
-      dispatch(action);
-    } else {
-      return;
-    }
+    if (action) { dispatch(action); }
   }
+}
+
+function summarizeThunk(): ThunkResult<void> {
+  return async (dispatch, getState) => {
+    const {db} = getState();
+    if (db) {
+      const summary = await web.summarizeDb(db);
+      const action: Summary = {type: 'summary', summary};
+      dispatch(action);
+    }
+  };
 }
 
 /*
@@ -539,6 +555,11 @@ function Login(props: {}) {
   );
 }
 
+function Summary() {
+  const {summary} = useSelector(({summary}: State) => ({summary}));
+  return ce('div', {}, ce('pre', {style: {whitespace: 'pre-warp'}}, JSON.stringify(summary, null, 1)));
+}
+
 function App() {
   const {db, docs, dbLoading, graph, lastSharedUid, gatty} =
       useSelector(({db, docs, dbLoading, graph, lastSharedUid, gatty}: State) =>
@@ -574,6 +595,7 @@ function App() {
       ce(Editor, editorProps),
       ce(Learn, learnProps),
       ce(ShowDocs, showDocsProps),
+      ce(Summary),
   );
 }
 

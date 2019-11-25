@@ -66782,6 +66782,9 @@ function rootReducer(state = INITIAL_STATE, action) {
         const docs = newdocs || state.docs;
         return Object.assign({}, state, { lastSharedUid: newSharedUid, graph, docs });
     }
+    else if (action.type === 'summary') {
+        return Object.assign({}, state, { summary: action.summary });
+    }
     return state;
 }
 function initdb(dbName) {
@@ -66797,6 +66800,7 @@ function initdb(dbName) {
             const done = { type: 'reqDb', status: 'finished', dbName, db, docs, ebisus };
             dispatch(done);
         }
+        dispatch(summarizeThunk());
     });
 }
 function saveDocThunk(db, oldDoc, content, title, date) {
@@ -66930,8 +66934,15 @@ function syncThunk(db, graph, docs, lastSharedUid, gatty) {
         if (action) {
             dispatch(action);
         }
-        else {
-            return;
+    });
+}
+function summarizeThunk() {
+    return (dispatch, getState) => __awaiter(this, void 0, void 0, function* () {
+        const { db } = getState();
+        if (db) {
+            const summary = yield web.summarizeDb(db);
+            const action = { type: 'summary', summary };
+            dispatch(action);
         }
     });
 }
@@ -67113,6 +67124,10 @@ function Login(props) {
         onChange: e => setURL(e.target.value)
     })), ce('div', { className: 'input-group' }, ce('label', null, 'Token'), ce('input', { type: 'password', value: token, onChange: e => setToken(e.target.value) })), ce('input', { type: 'submit', value: 'Login' })));
 }
+function Summary() {
+    const { summary } = react_redux_1.useSelector(({ summary }) => ({ summary }));
+    return ce('div', {}, ce('pre', { style: { whitespace: 'pre-warp' } }, JSON.stringify(summary, null, 1)));
+}
 function App() {
     const { db, docs, dbLoading, graph, lastSharedUid, gatty } = react_redux_1.useSelector(({ db, docs, dbLoading, graph, lastSharedUid, gatty }) => ({ db, docs, dbLoading, graph, lastSharedUid, gatty }));
     const dispatch = react_redux_1.useDispatch();
@@ -67140,7 +67155,7 @@ function App() {
         }
     };
     const showDocsProps = { graph, docs, toggleLearnStatus };
-    return ce('div', null, ce(Login), ce(Editor, editorProps), ce(Learn, learnProps), ce(ShowDocs, showDocsProps));
+    return ce('div', null, ce(Login), ce(Editor, editorProps), ce(Learn, learnProps), ce(ShowDocs, showDocsProps), ce(Summary));
 }
 // Render!
 react_dom_1.default.render(ce(react_redux_1.Provider, { store: store }, ce(App)), document.getElementById('root'));
