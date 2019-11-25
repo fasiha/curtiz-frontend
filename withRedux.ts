@@ -595,7 +595,7 @@ function App() {
       ce(Editor, editorProps),
       ce(Learn, learnProps),
       ce(ShowDocs, showDocsProps),
-      ce(Summary),
+      // ce(Summary),
   );
 }
 

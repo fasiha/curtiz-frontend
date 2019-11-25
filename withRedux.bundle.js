@@ -67155,7 +67155,7 @@ function App() {
         }
     };
     const showDocsProps = { graph, docs, toggleLearnStatus };
-    return ce('div', null, ce(Login), ce(Editor, editorProps), ce(Learn, learnProps), ce(ShowDocs, showDocsProps), ce(Summary));
+    return ce('div', null, ce(Login), ce(Editor, editorProps), ce(Learn, learnProps), ce(ShowDocs, showDocsProps));
 }
 // Render!
 react_dom_1.default.render(ce(react_redux_1.Provider, { store: store }, ce(App)), document.getElementById('root'));
