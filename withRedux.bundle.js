@@ -67103,7 +67103,7 @@ function Login(props) {
     const dispatch = react_redux_1.useDispatch();
     const gatty = react_redux_1.useSelector((state) => state.gatty);
     if (gatty) {
-        return ce('div', {}, 'Logged in! Refresh to log out.');
+        return ce('div', {}, 'Logged in! Refresh to log out. ', ce(SyncButton));
     }
     return ce('div', null, ce('form', {
         onSubmit: (e) => {
@@ -67127,6 +67127,14 @@ function Login(props) {
 function Summary() {
     const { summary } = react_redux_1.useSelector(({ summary }) => ({ summary }));
     return ce('div', {}, ce('pre', { style: { whitespace: 'pre-warp' } }, JSON.stringify(summary, null, 1)));
+}
+function SyncButton() {
+    const { db, docs, graph, lastSharedUid, gatty } = react_redux_1.useSelector(({ db, docs, graph, lastSharedUid, gatty }) => ({ db, docs, graph, lastSharedUid, gatty }));
+    const dispatch = react_redux_1.useDispatch();
+    if (db) {
+        return ce('div', {}, ce('button', { onClick: () => dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty)) }, 'Sync'));
+    }
+    return ce('div', {}, '');
 }
 function App() {
     const { db, docs, dbLoading, graph, lastSharedUid, gatty } = react_redux_1.useSelector(({ db, docs, dbLoading, graph, lastSharedUid, gatty }) => ({ db, docs, dbLoading, graph, lastSharedUid, gatty }));

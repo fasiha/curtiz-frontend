@@ -507,7 +507,7 @@ function Login(props: {}) {
   const dispatch = useDispatch();
 
   const gatty = useSelector((state: State) => state.gatty);
-  if (gatty) { return ce('div', {}, 'Logged in! Refresh to log out.'); }
+  if (gatty) { return ce('div', {}, 'Logged in! Refresh to log out. ', ce(SyncButton)); }
 
   return ce(
       'div',
@@ -558,6 +558,17 @@ function Login(props: {}) {
 function Summary() {
   const {summary} = useSelector(({summary}: State) => ({summary}));
   return ce('div', {}, ce('pre', {style: {whitespace: 'pre-warp'}}, JSON.stringify(summary, null, 1)));
+}
+
+function SyncButton() {
+  const {db, docs, graph, lastSharedUid, gatty} =
+      useSelector(({db, docs, graph, lastSharedUid, gatty}: State) => ({db, docs, graph, lastSharedUid, gatty}));
+  const dispatch = useDispatch();
+  if (db) {
+    return ce('div', {},
+              ce('button', {onClick: () => dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty))}, 'Sync'));
+  }
+  return ce('div', {}, '');
 }
 
 function App() {
