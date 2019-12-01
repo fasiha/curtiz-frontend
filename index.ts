@@ -378,23 +378,28 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (key
     const blocks = markdownToBlocks(doc.content);
     for (const [blocknum, block] of enumerate(blocks)) {
       for (const [lino, line] of enumerate(block)) {
+        const htmlTag =
+            line.startsWith('###')
+                ? 'h3'
+                : line.startsWith('## ') ? 'h2' : line.startsWith('# ') ? 'h1' : line.startsWith('- @') ? 'div' : '';
+
         const uids = props.graph.raws.get(lino === 0 ? line : block[0] + '\n' + line);
-        const furi = line.startsWith('- @furigana') ? FuriganaComponent({furiganaString: line}) : line;
+        const lineFuri = line.startsWith('- @furigana') ? FuriganaComponent({furiganaString: line}) : line;
         const key = [doc.title, blocknum, lino].join('/');
         if (uids) {
           const quizs = Array.from(uids, uid => props.graph.nodes.get(uid));
-          const describe = (q: Quiz|undefined) => q ? ('subkind' in q ? `${q.subkind} ` : '') + q.kind +
-                                                          (props.graph.ebisus.has(q.uniqueId) ? ' unlearn' : ' learn')
-                                                    : 'unknown';
+          const describe = (q: Quiz|undefined) =>
+              q ? ('subkind' in q ? `${q.subkind} ` : '') + q.kind + (props.graph.ebisus.has(q.uniqueId) ? ' 👍' : ' ❓')
+                : 'unknown?';
           const buttons = quizs.map(q => q ? ce(
                                                  'button',
                                                  {onClick: (e) => props.toggleLearnStatus([q.uniqueId])},
                                                  describe(q),
                                                  )
                                            : '');
-          lis.push(ce('li', {key}, furi, ...buttons));
+          lis.push(ce('li', {key}, htmlTag ? ce(htmlTag, {}, lineFuri) : lineFuri, ...buttons));
         } else {
-          lis.push(ce('li', {key}, furi));
+          lis.push(ce('li', {key}, htmlTag ? ce(htmlTag, {}, lineFuri) : lineFuri));
         }
       }
     }

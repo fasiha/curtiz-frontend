@@ -7,6 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc -p .",
     "dist": "browserify index.js -o index.bundle.js",
+    "min": "google-closure-compiler --language_out ECMASCRIPT_2015 --js=index.bundle.js --js_output_file=index.bundle.min.es6.js",
     "watch": "fswatch -0 -o -l .1 index.js docs.js Edit.js | xargs -0 -n 1 -I {} npm run dist"
   },
   "keywords": [],
@@ -21,6 +22,7 @@
     "@types/react-redux": "^7.1.5",
     "@types/redux-logger": "^3.0.7",
     "browserify": "^16.2.3",
+    "google-closure-compiler": "^20191111.0.0",
     "mini.css": "^3.0.1",
     "typescript": "^3.5.2"
   },
