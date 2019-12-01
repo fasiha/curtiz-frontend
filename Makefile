@@ -2,7 +2,10 @@ TSSRC := $(wildcard *.ts)
 JSSRC := $(TSSRC:.ts=.js)
 JSSRC := $(filter-out *bundle*, $(JSSRC))
 
-all: index.bundle.js withRedux.bundle.js
+all: index.bundle.js mini-dark.min.css
+
+mini-dark.min.css: node_modules/mini.css/dist/mini-dark.min.css
+	cp node_modules/mini.css/dist/mini-dark.min.css .
 
 %.js: %.ts
 	npm run build
@@ -10,10 +13,6 @@ all: index.bundle.js withRedux.bundle.js
 index.bundle.js: index.js
 	npm run dist
 	echo done
-
-withRedux.bundle.js: withRedux.js
-	npx browserify withRedux.js -o withRedux.bundle.js
-	echo done redux
 
 # Assumes VS Code is running in watch build mode
 watch:
