@@ -11,7 +11,7 @@ mini-dark.min.css: node_modules/mini.css/dist/mini-dark.min.css
 	npm run build
 
 index.bundle.js: $(JSSRC)
-	npm run dist
+	NODE_ENV=production npm run dist
 	echo done
 
 index.bundle.min.es6.js: index.bundle.js
