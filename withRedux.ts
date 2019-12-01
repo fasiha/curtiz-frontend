@@ -47,6 +47,7 @@ interface ReqDbFinished extends ReqDbBase {
   db: Db;
   docs: Doc[];
   ebisus: KeyToEbisu;
+  lastSharedUid: string;
 }
 type ReqDb = ReqDbStarted|ReqDbFinished;
 
@@ -118,7 +119,7 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     } else {
       const graph: GraphType = {...emptyGraph(), ...action.ebisus};
       action.docs.forEach(doc => textToGraph(doc.content, graph));
-      return {...state, db: action.db, docs: action.docs, dbLoading: false, graph};
+      return {...state, db: action.db, docs: action.docs, dbLoading: false, graph, lastSharedUid: action.lastSharedUid};
     }
   } else if (action.type === 'saveDoc') {
     const {oldDoc, newDoc} = action;
@@ -162,7 +163,13 @@ function initdb(dbName: string): ThunkResult<void> {
       const db = web.setup(dbName);
       const docs = await loadDocs(db, DOCS_PREFIX);
       const ebisus = await web.loadEbisus(db);
-      const done: ReqDbFinished = {type: 'reqDb', status: 'finished', dbName, db, docs, ebisus};
+
+      let lastSharedUid = '';
+      try {
+        lastSharedUid = await db.get('lastSharedUid', {asBuffer: false});
+      } catch (e) { await db.put('lastSharedUid', ''); }
+
+      const done: ReqDbFinished = {type: 'reqDb', status: 'finished', dbName, db, docs, ebisus, lastSharedUid};
       dispatch(done);
     }
     dispatch(summarizeThunk());
@@ -207,14 +214,8 @@ function loginThunk({username, url, token}: {username: string, url: string, toke
     const action: LoginAction = {type: 'login', gatty};
     dispatch(action);
 
-    let lastSharedUid = '';
-    const {db, graph, docs} = getState();
-    if (db) {
-      try {
-        lastSharedUid = await db.get('lastSharedUid', {asBuffer: false});
-      } catch (e) { await db.put('lastSharedUid', ''); }
-      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
-    }
+    const {db, graph, docs, lastSharedUid} = getState();
+    if (db) { dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty)); }
   }
 }
 
@@ -228,7 +229,7 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
     // console.log('BEFORE sync, in syncer', {res, lastSharedUid});
     const {newEvents, newSharedUid} =
         await sync(gatty, lastSharedUid, res.map(o => o.value.uid), res.map(o => JSON.stringify(o.value)));
-    // console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
+    console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
 
     // if something recent was shared, or something old synced only now:
 

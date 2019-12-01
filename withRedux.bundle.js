@@ -66824,7 +66824,7 @@ function rootReducer(state = INITIAL_STATE, action) {
         else {
             const graph = Object.assign({}, emptyGraph(), action.ebisus);
             action.docs.forEach(doc => curtiz_parse_markdown_1.textToGraph(doc.content, graph));
-            return Object.assign({}, state, { db: action.db, docs: action.docs, dbLoading: false, graph });
+            return Object.assign({}, state, { db: action.db, docs: action.docs, dbLoading: false, graph, lastSharedUid: action.lastSharedUid });
         }
     }
     else if (action.type === 'saveDoc') {
@@ -66868,7 +66868,14 @@ function initdb(dbName) {
             const db = web.setup(dbName);
             const docs = yield docs_1.loadDocs(db, docs_1.DOCS_PREFIX);
             const ebisus = yield web.loadEbisus(db);
-            const done = { type: 'reqDb', status: 'finished', dbName, db, docs, ebisus };
+            let lastSharedUid = '';
+            try {
+                lastSharedUid = yield db.get('lastSharedUid', { asBuffer: false });
+            }
+            catch (e) {
+                yield db.put('lastSharedUid', '');
+            }
+            const done = { type: 'reqDb', status: 'finished', dbName, db, docs, ebisus, lastSharedUid };
             dispatch(done);
         }
         dispatch(summarizeThunk());
@@ -66910,15 +66917,8 @@ function loginThunk({ username, url, token }) {
         const gatty = yield isomorphic_gatty_1.setup({ corsProxy: 'https://cors.isomorphic-git.org', username, token }, url);
         const action = { type: 'login', gatty };
         dispatch(action);
-        let lastSharedUid = '';
-        const { db, graph, docs } = getState();
+        const { db, graph, docs, lastSharedUid } = getState();
         if (db) {
-            try {
-                lastSharedUid = yield db.get('lastSharedUid', { asBuffer: false });
-            }
-            catch (e) {
-                yield db.put('lastSharedUid', '');
-            }
             dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
         }
     });
@@ -66931,7 +66931,7 @@ function syncer(db, graph, docs, lastSharedUid, gatty) {
             const res = yield web.summarizeDb(db, opts);
             // console.log('BEFORE sync, in syncer', {res, lastSharedUid});
             const { newEvents, newSharedUid } = yield isomorphic_gatty_1.sync(gatty, lastSharedUid, res.map(o => o.value.uid), res.map(o => JSON.stringify(o.value)));
-            // console.log('!AFTER sync in syncer', {newEvents, newSharedUid});
+            console.log('!AFTER sync in syncer', { newEvents, newSharedUid });
             // if something recent was shared, or something old synced only now:
             if (newSharedUid !== lastSharedUid || newEvents.length) {
                 const syncAction = { type: 'sync', newSharedUid };
