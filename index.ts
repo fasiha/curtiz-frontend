@@ -7,6 +7,7 @@ import {Gatty, setup, sync} from 'isomorphic-gatty';
 import {Furigana, furiganaToString, stringToFurigana} from 'jmdict-furigana-node';
 import leveljs from 'level-js';
 import {LevelUp} from 'levelup';
+import debounce from 'lodash.debounce';
 import React, {useMemo, useRef, useState} from 'react';
 import ReactDOM from 'react-dom';
 import {Provider, useDispatch, useSelector} from 'react-redux';
@@ -215,7 +216,7 @@ function loginThunk({username, url, token}: {username: string, url: string, toke
     dispatch(action);
 
     const {db, graph, docs, lastSharedUid} = getState();
-    if (db) { dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty)); }
+    if (db) { dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty, true)); }
   }
 }
 
@@ -250,7 +251,7 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
           } else if (e.action === 'doc') {
             const key = docToStorageKey(e.doc, DOCS_PREFIX);
             dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
-            newDocs.set(e.doc.title, e.doc);
+            newDocs.set(key, e.doc);
           } else if (e.action === 'unlearn') {
             const key = web.EBISU_PREFIX + e.key;
             dbKeyToBatch.set(key, {type: 'del', key});
@@ -291,12 +292,14 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
     }
   }
 }
-function syncThunk(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: string, gatty?: Gatty): ThunkResult<void> {
+function syncThunk(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: string, gatty?: Gatty,
+                   immediate = false): ThunkResult<void> {
   return async (dispatch) => {
-    const action = await syncer(db, graph, docs, lastSharedUid, gatty);
+    const action = await (immediate ? syncer : syncerDebounced)(db, graph, docs, lastSharedUid, gatty);
     if (action) { dispatch(action); }
   }
 }
+const syncerDebounced = debounce(syncer, 10e3, {maxWait: 60e3, leading: false, trailing: true});
 
 function summarizeThunk(): ThunkResult<void> {
   return async (dispatch, getState) => {
