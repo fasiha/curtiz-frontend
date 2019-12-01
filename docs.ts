@@ -15,7 +15,7 @@ export type Doc = {
   modified: Date,
 };
 
-function docToStorageKey(doc: Doc, prefix: string) {
+export function docToStorageKey(doc: Doc, prefix: string) {
   // eventually this will do something with the other sources
   return prefix + doc.source.created.toISOString();
 }

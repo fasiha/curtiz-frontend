@@ -10,7 +10,7 @@ mini-dark.min.css: node_modules/mini.css/dist/mini-dark.min.css
 %.js: %.ts
 	npm run build
 
-index.bundle.js: index.js
+index.bundle.js: $(JSSRC)
 	npm run dist
 	echo done
 

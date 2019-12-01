@@ -14,7 +14,7 @@ import {applyMiddleware, createStore} from 'redux';
 import {createLogger} from 'redux-logger';
 import thunkMiddleware, {ThunkAction} from 'redux-thunk';
 
-import {Doc, DOCS_PREFIX, EventDoc, loadDocs, saveDoc} from './docs';
+import {Doc, DOCS_PREFIX, docToStorageKey, EventDoc, loadDocs, saveDoc} from './docs';
 
 export type Db = LevelUp<leveljs, AbstractIterator<any, any>>;
 type GraphType = QuizGraph&KeyToEbisu; // ebisus, nodes, edges, raws
@@ -248,7 +248,7 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
             const key = web.EBISU_PREFIX + e.key;
             dbKeyToBatch.set(key, {type: 'put', key, value: e.ebisu});
           } else if (e.action === 'doc') {
-            const key = DOCS_PREFIX + e.doc.title;
+            const key = docToStorageKey(e.doc, DOCS_PREFIX);
             dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
             newDocs.set(e.doc.title, e.doc);
           } else if (e.action === 'unlearn') {
@@ -273,7 +273,7 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
 
         const newDocsArr = docs.slice();
         for (const [k, v] of newDocs) {
-          const didx = newDocsArr.findIndex(doc => doc.title === k);
+          const didx = newDocsArr.findIndex(doc => docToStorageKey(doc, DOCS_PREFIX) === k);
           if (didx >= 0) {
             newDocsArr.splice(didx, 1, v);
           } else {
@@ -337,7 +337,8 @@ function EditableDoc(props: {doc: Doc, saveDoc: SaveDocType}) {
       ce('input', {type: 'text', value: title, onChange: e => setTitle(e.target.value)}),
       ce('textarea',
          {value: content, onChange: (e: React.ChangeEvent<HTMLInputElement>) => { setContent(e.target.value) }}),
-      ce('button', {onClick: (_: any) => { props.saveDoc(props.doc, content, title, new Date()); }}, 'Submit'),
+      ce('button', {onClick: (_: any) => { props.saveDoc(props.doc, content, title, props.doc.source.created); }},
+         'Submit'),
   )
 }
 
@@ -450,7 +451,7 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
       const texts = quiz.pairs.map((o, i) => `(${i + 1})` + furiganaToString(o.text));
       const tls = quiz.pairs.map(o => o.translation['en']);
       const shuffledTls = idxs.map(i => tls[i] + '=?');
-      prompt = `Match ${texts.join('。 ')}。 Choices: ・${shuffledTls.join(' ・')}`;
+      prompt = `Enter numbers (without spaces) to match ${texts.join('。 ')}。 Choices: ・${shuffledTls.join(' ・')}`;
       grader = (s: string) => s === idxs.map(n => n + 1).join('');
     } else {
       throw new Error('unknown quiz type');
