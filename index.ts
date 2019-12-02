@@ -216,7 +216,7 @@ function loginThunk({username, url, token}: {username: string, url: string, toke
     dispatch(action);
 
     const {db, graph, docs, lastSharedUid} = getState();
-    if (db) { dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty, true)); }
+    if (db) { dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty)); }
   }
 }
 
@@ -246,21 +246,31 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
           batch.push({type: 'put', key: web.EVENT_PREFIX + e.uid, value: e});
           // local db should update the things the events talk about too!
           if (e.action === 'learn' || e.action === 'update') {
-            const key = web.EBISU_PREFIX + e.key;
-            dbKeyToBatch.set(key, {type: 'put', key, value: e.ebisu});
+            const hit = graph.ebisus.get(e.key);
+            // add to our db if either we haven't learned it or if we have, we reviewed it before the remote event
+            if (!hit || e.date > hit.lastDate) {
+              const key = web.EBISU_PREFIX + e.key;
+              dbKeyToBatch.set(key, {type: 'put', key, value: e.ebisu});
+            }
           } else if (e.action === 'doc') {
             const key = docToStorageKey(e.doc, DOCS_PREFIX);
             dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
             newDocs.set(key, e.doc);
           } else if (e.action === 'unlearn') {
-            const key = web.EBISU_PREFIX + e.key;
-            dbKeyToBatch.set(key, {type: 'del', key});
+            const hit = graph.ebisus.get(e.key);
+            // again, DELETE this card from our database only if we HAVE learned it and reviewed it before it was
+            // deleted remotely
+            if (hit && e.date > hit.lastDate) {
+              const key = web.EBISU_PREFIX + e.key;
+              dbKeyToBatch.set(key, {type: 'del', key});
+            }
           } else {
             throw new Error('unhandled event action');
           }
         }
         for (const value of dbKeyToBatch.values()) { batch.push(value); }
       }
+      // write new ebisus and docs to local database
       await db.batch(batch);
       if (graph && batch.length) {
         const newGraph: GraphType = {
@@ -270,8 +280,10 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
           raws: new Map(graph.raws),
         };
         for (const doc of newDocs.values()) { textToGraph(doc.content, newGraph); }
+        // reread local database (now modified) with new ebisus
         const finalGraph: GraphType = {...newGraph, ...await web.loadEbisus(db)};
 
+        // append or update docs array
         const newDocsArr = docs.slice();
         for (const [k, v] of newDocs) {
           const didx = newDocsArr.findIndex(doc => docToStorageKey(doc, DOCS_PREFIX) === k);
@@ -281,19 +293,16 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
             newDocsArr.push(v);
           }
         }
-        // setGraph(finalGraph);
-        // setDocs(newDocsArr);
         syncAction.newdocs = newDocsArr;
         syncAction.newgraph = finalGraph;
       }
-      // setLastSharedUid(newSharedUid);
       syncAction.newSharedUid = newSharedUid;
       return syncAction;
     }
   }
 }
 function syncThunk(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: string, gatty?: Gatty,
-                   immediate = false): ThunkResult<void> {
+                   immediate = true): ThunkResult<void> {
   return async (dispatch) => {
     const action = await (immediate ? syncer : syncerDebounced)(db, graph, docs, lastSharedUid, gatty);
     if (action) { dispatch(action); }
@@ -609,14 +618,14 @@ function App() {
   const update = (result: boolean, key: string, summary: string) => {
     if (db) {
       dispatch(quizItemThunk(db, graph, result, key, summary));
-      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
+      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty, false));
     }
   };
   const learnProps = {graph, update};
   const toggleLearnStatus = (keys: string[]) => {
     if (db) {
       dispatch(toggleLearnStatusThunk(db, graph, keys));
-      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty));
+      dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty, false));
     }
   };
   const showDocsProps = {graph, docs, toggleLearnStatus};
