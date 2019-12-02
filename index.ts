@@ -1,6 +1,6 @@
 import {AbstractBatch, AbstractIterator, AbstractIteratorOptions} from 'abstract-leveldown';
 import {Quiz, QuizGraph, QuizKind, textToGraph} from 'curtiz-parse-markdown';
-import {KeyToEbisu, whichToQuiz} from 'curtiz-quiz-planner';
+import {KeyToEbisu, whichToQuiz, WhichToQuizOpts} from 'curtiz-quiz-planner';
 import {enumerate, kata2hira, mapRight, partitionBy} from 'curtiz-utils';
 import * as web from 'curtiz-web-db';
 import {Gatty, setup, sync} from 'isomorphic-gatty';
@@ -33,7 +33,7 @@ Each synchronous action just needs a single action type.
 
 Just types, nothing else.
 */
-type Action = ReqDb|SaveDoc|LearnItem|QuizItem|LoginAction|Sync|Summary;
+type Action = ReqDb|SaveDoc|LearnItem|QuizItem|LoginAction|Sync|Summary|ToggleProbabilityDisplay;
 
 interface ReqDbBase {
   type: 'reqDb';
@@ -85,6 +85,9 @@ interface Summary {
   type: 'summary';
   summary: any;
 }
+interface ToggleProbabilityDisplay {
+  type: 'toggleProbabilityDisplay';
+}
 
 /*
 # Step 2. Define your state type and initial state.
@@ -98,6 +101,7 @@ interface State {
   gatty?: Gatty;
   lastSharedUid: string;
   summary?: any;
+  showProbabilityDisplay: boolean;
 }
 
 const INITIAL_STATE: State = {
@@ -107,6 +111,7 @@ const INITIAL_STATE: State = {
   graph: emptyGraph(),
   quizSummaries: [],
   lastSharedUid: '',
+  showProbabilityDisplay: false
 };
 
 /*
@@ -145,6 +150,8 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     return {...state, lastSharedUid: newSharedUid, graph, docs};
   } else if (action.type === 'summary') {
     return {...state, summary: action.summary};
+  } else if (action.type === 'toggleProbabilityDisplay') {
+    return { ...state, showProbabilityDisplay: !state.showProbabilityDisplay }
   }
   return state;
 }
@@ -516,14 +523,33 @@ function AQuiz(props: {quiz: Quiz, update: (result: boolean, key: string, summar
   );
 }
 
-function Learn(props: {graph: GraphType, update: (result: boolean, key: string, summary: string) => any}) {
-  const bestQuiz = whichToQuiz(props.graph);
+function Learn(props: {
+  showProbabilityDisplay: boolean,
+  graph: GraphType,
+  update: (result: boolean, key: string, summary: string) => any
+}) {
+  const opts: WhichToQuizOpts = {details: {out: []}};
+  const bestQuiz = whichToQuiz(props.graph, props.showProbabilityDisplay ? opts : undefined);
   const component =
       bestQuiz ? ce(AQuiz, {quiz: bestQuiz, update: props.update}) : ce('div', {}, 'Nothing learned to quiz!');
   const quizSummaries = useSelector((state: State) => state.quizSummaries);
   const quizLis = mapRight(quizSummaries, s => ce('li', {key: s}, FuriganaComponent({furiganaString: s})));
   const summariesComponent = ce('ul', {}, quizLis);
-  return ce('div', {}, component, summariesComponent);
+
+  const dispatch = useDispatch();
+  const toggle = ce('button', {onClick: () => dispatch({type: 'toggleProbabilityDisplay'})},
+                    'Toggle flashcard probability analysis')
+  if (props.showProbabilityDisplay) {
+    if (opts.details && opts.details.out) { opts.details.out.sort((a, b) => (a.precall || 0) - (b.precall || 0)); }
+    const vec = opts.details &&
+                opts.details.out.map(({key, precall, model, date}) =>
+                                         ce('li', {key},
+                                            `${Math.exp(precall || 0).toFixed(4)}, [${
+                                                model ? model.map(s => s.toFixed(2)).join(', ') : ''}], ${key}`));
+    const details = ce('details', {}, ce('summary', {}, 'Quiz details'), ce('ul', {}, ...(vec || [])));
+    return ce('div', {}, component, summariesComponent, toggle, details);
+  }
+  return ce('div', {}, component, summariesComponent, toggle);
 }
 
 function Login(props: {}) {
@@ -602,9 +628,9 @@ function ResetRemote() {
 }
 
 function App() {
-  const {db, docs, dbLoading, graph, lastSharedUid, gatty} =
-      useSelector(({db, docs, dbLoading, graph, lastSharedUid, gatty}: State) =>
-                      ({db, docs, dbLoading, graph, lastSharedUid, gatty}));
+  const {db, docs, dbLoading, graph, lastSharedUid, gatty, showProbabilityDisplay} =
+      useSelector(({db, docs, dbLoading, graph, lastSharedUid, gatty, showProbabilityDisplay}: State) =>
+                      ({db, docs, dbLoading, graph, lastSharedUid, gatty, showProbabilityDisplay}));
   const dispatch = useDispatch();
   if (!db && !dbLoading) { dispatch(initdb('testing')) }
   const saveDoc: SaveDocType = (doc: Doc|undefined, contents: string, title: string, date?: Date) => {
@@ -621,7 +647,7 @@ function App() {
       dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty, false));
     }
   };
-  const learnProps = {graph, update};
+  const learnProps = {graph, update, showProbabilityDisplay};
   const toggleLearnStatus = (keys: string[]) => {
     if (db) {
       dispatch(toggleLearnStatusThunk(db, graph, keys));
