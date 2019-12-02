@@ -417,7 +417,7 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (key
       }
     }
   }
-  return ce('ul', {}, lis);
+  return ce('ul', {id: 'docs-list'}, lis);
 }
 
 function useFocus() {
