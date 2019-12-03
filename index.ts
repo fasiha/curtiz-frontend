@@ -261,8 +261,11 @@ async function syncer(db: Db, graph: GraphType, docs: Doc[], lastSharedUid: stri
             }
           } else if (e.action === 'doc') {
             const key = docToStorageKey(e.doc, DOCS_PREFIX);
-            dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
-            newDocs.set(key, e.doc);
+            const hit = docs.find(doc => docToStorageKey(doc, DOCS_PREFIX) === key);
+            if (!hit || e.date > hit.modified) {
+              dbKeyToBatch.set(key, {type: 'put', key, value: e.doc});
+              newDocs.set(key, e.doc);
+            }
           } else if (e.action === 'unlearn') {
             const hit = graph.ebisus.get(e.key);
             // again, DELETE this card from our database only if we HAVE learned it and reviewed it before it was
