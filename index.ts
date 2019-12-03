@@ -33,7 +33,7 @@ Each synchronous action just needs a single action type.
 
 Just types, nothing else.
 */
-type Action = ReqDb|SaveDoc|LearnItem|QuizItem|LoginAction|Sync|Summary|ToggleProbabilityDisplay;
+type Action = ReqDb|SaveDoc|LearnItem|QuizItem|LoginAction|Sync|Summary|ToggleProbabilityDisplay|ResetLastSharedUid;
 
 interface ReqDbBase {
   type: 'reqDb';
@@ -87,6 +87,9 @@ interface Summary {
 }
 interface ToggleProbabilityDisplay {
   type: 'toggleProbabilityDisplay';
+}
+interface ResetLastSharedUid {
+  type: 'resetLastSharedUid';
 }
 
 /*
@@ -152,6 +155,8 @@ function rootReducer(state = INITIAL_STATE, action: Action): State {
     return {...state, summary: action.summary};
   } else if (action.type === 'toggleProbabilityDisplay') {
     return { ...state, showProbabilityDisplay: !state.showProbabilityDisplay }
+  } else if (action.type === 'resetLastSharedUid') {
+    return {...state, lastSharedUid: ''};
   }
   return state;
 }
@@ -334,7 +339,20 @@ function summarizeThunk(): ThunkResult<void> {
 function resetThunk(): ThunkResult<void> {
   return async (dispatch, getState) => {
     const {db} = getState();
-    if (db) { await db.put('lastSharedUid', ''); }
+    if (db) {
+      await db.put('lastSharedUid', '');
+      dispatch({type: 'resetLastSharedUid'});
+    }
+  }
+}
+
+function deleteThunk(): ThunkResult<void> {
+  return async (dispatch, getState) => {
+    const {db} = getState();
+    if (db) {
+      await web.deleteDb(db);
+      location.reload();
+    }
   }
 }
 
@@ -627,7 +645,13 @@ function SyncButton() {
 }
 function ResetRemote() {
   const dispatch = useDispatch();
-  return ce('button', {onClick: () => dispatch(resetThunk())}, 'Reset');
+  return ce(
+      'details',
+      {},
+      ce('summary', {}, '💀 Resets ☣️'),
+      ce('button', {onClick: () => dispatch(resetThunk())}, 'Reset local'),
+      ce('button', {onClick: () => { dispatch(deleteThunk()) }}, 'Delete local'),
+  );
 }
 
 function App() {
