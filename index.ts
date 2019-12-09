@@ -199,14 +199,14 @@ function saveDocThunk(db: Db, oldDoc: Doc|undefined, content: string, title: str
   }
 }
 
-function toggleLearnStatusThunk(db: Db, graph: GraphType, uids: string[]): ThunkResult<void> {
+function toggleLearnStatusThunk(db: Db, graph: GraphType, uids: string[], halflives?: number[]): ThunkResult<void> {
   return async (dispatch) => {
     const args = {ebisus: graph.ebisus};
-    for (const uid of uids) {
+    for (const [i, uid] of enumerate(uids)) {
       if (graph.ebisus.has(uid)) {
         await web.unlearnQuizzes(db, [uid], args);
       } else {
-        await web.learnQuizzes(db, [uid], args);
+        await web.learnQuizzes(db, [uid], args, {halflife:halflives?.[i]});
       }
     }
     const action: LearnItem = {type: 'learnItem', ebisus: graph.ebisus};
@@ -410,7 +410,8 @@ function markdownToBlocks(md: string) {
   return headers;
 }
 
-function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (keys: string[]) => void}) {
+function ShowDocs(
+    props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (keys: string[], halflives?: number[]) => void}) {
   const li = ce('li'); // solely used to get type without hardcoding :P
   type Li = typeof li;
   const lis: Li[] = [];
@@ -429,15 +430,13 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (key
         const key = [doc.title, blocknum, lino].join('/');
         if (uids) {
           const quizs = Array.from(uids, uid => props.graph.nodes.get(uid));
-          const describe = (q: Quiz|undefined) =>
-              q ? ('subkind' in q ? `${q.subkind} ` : '') + q.kind + (props.graph.ebisus.has(q.uniqueId) ? ' 👍' : ' ❓')
-                : 'unknown?';
-          const buttons = quizs.map(q => q ? ce(
-                                                 'button',
-                                                 {onClick: (e) => props.toggleLearnStatus([q.uniqueId])},
-                                                 describe(q),
-                                                 )
-                                           : '');
+          const buttons = quizs.map(q => {
+            if (!q) { return ''; }
+            const learned = props.graph.ebisus.has(q.uniqueId);
+            const text = ('subkind' in q ? `${q.subkind} ` : '') + q.kind + (learned ? ' 👍' : ' ❓');
+            if (learned) { return ce('button', {onClick: () => props.toggleLearnStatus([q.uniqueId])}, text) }
+            return ce(ButtonSlider, {firstText: text, doneFn: hours => props.toggleLearnStatus([q.uniqueId], [hours])})
+          });
           lis.push(ce('li', {key}, htmlTag ? ce(htmlTag, {}, lineFuri) : lineFuri, ...buttons));
         } else {
           lis.push(ce('li', {key}, htmlTag ? ce(htmlTag, {}, lineFuri) : lineFuri));
@@ -445,7 +444,57 @@ function ShowDocs(props: {docs: Doc[], graph: GraphType, toggleLearnStatus: (key
       }
     }
   }
-  return ce('ul', {id: 'docs-list'}, lis);
+  return ce('div', {}, ce(ButtonSlider), ce('ul', {id: 'docs-list'}, lis));
+}
+
+function makeStandardHalflives(): [string, number][] {
+  const hoursPerMin = 1 / 60;
+  const hoursPerDay = 24;
+  const hoursPerWeek = hoursPerDay * 7;
+  const hoursPerMonth = hoursPerDay * 31;
+  const hoursPerYear = hoursPerDay * 365.25;
+  return [
+    ["five minutes", 5 * hoursPerMin],
+    ["fifteen minutes", 0.25],
+    ["one hour", 1],
+    ["six hours", 6],
+    ["twelve hours", 12],
+    ["one day", 24],
+    ["three days", 3 * hoursPerDay],
+    ["one week", hoursPerWeek],
+    ["two weeks", 2 * hoursPerWeek],
+    ["one month", hoursPerMonth],
+    ["three months", 3 * hoursPerMonth],
+    ["one year", hoursPerYear],
+    ["two years", 2 * hoursPerYear],
+  ];
+}
+const STANDARD_HALFLIVES_HOURS = makeStandardHalflives();
+
+function ButtonSlider(props: {firstText?: string, secondText?: string, doneFn?: (hours: number) => void}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(1);
+  if (open) {
+    return ce('span', {},
+              ce('button', {
+                onClick: () => {
+                  props.doneFn ?.(STANDARD_HALFLIVES_HOURS[value][1]);
+                  setOpen(false);
+                }
+              },
+                 props.secondText || 'Accept'),
+              ce('input', {
+                type: 'range',
+                min: 0,
+                max: STANDARD_HALFLIVES_HOURS.length - 1,
+                step: 1,
+                value,
+                onChange: e => setValue(+e.target.value)
+              }),
+              `${STANDARD_HALFLIVES_HOURS[value][0]}`);
+  }
+  // closed
+  return ce('button', {onClick: () => setOpen(true)}, props.firstText || 'Open');
 }
 
 function useFocus() {
@@ -675,9 +724,9 @@ function App() {
     }
   };
   const learnProps = {graph, update, showProbabilityDisplay};
-  const toggleLearnStatus = (keys: string[]) => {
+  const toggleLearnStatus = (keys: string[], halflives?: number[]) => {
     if (db) {
-      dispatch(toggleLearnStatusThunk(db, graph, keys));
+      dispatch(toggleLearnStatusThunk(db, graph, keys, halflives));
       dispatch(syncThunk(db, graph, docs, lastSharedUid, gatty, false));
     }
   };
