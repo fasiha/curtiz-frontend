@@ -377,8 +377,7 @@ function EditableDoc(props: {doc: Doc, saveDoc: SaveDocType}) {
       ce('input', {type: 'text', value: title, onChange: e => setTitle(e.target.value)}),
       ce('textarea',
          {value: content, onChange: (e: React.ChangeEvent<HTMLInputElement>) => { setContent(e.target.value) }}),
-      ce('button', {onClick: (_: any) => { props.saveDoc(props.doc, content, title, props.doc.source.created); }},
-         'Submit'),
+      ce('button', {onClick: (_: any) => { props.saveDoc(props.doc, content, title); }}, 'Submit'),
   )
 }
 
@@ -444,7 +443,7 @@ function ShowDocs(
       }
     }
   }
-  return ce('div', {}, ce(ButtonSlider), ce('ul', {id: 'docs-list'}, lis));
+  return ce('ul', {id: 'docs-list'}, lis);
 }
 
 function makeStandardHalflives(): [string, number][] {
